@@ -237,10 +237,10 @@ nav button[aria-current="true"]::before{content:"";position:absolute;top:0;left:
   <div class="sheet">
     <h3 id="mShop">明細</h3>
     <div class="sub" id="mSub"></div>
+    <div class="f"><span>表示名</span><input type="text" id="mUse" placeholder="飲み物＋お菓子 など"></div>
     <div class="f"><span>金額</span><input type="number" id="mAmt" inputmode="numeric"></div>
     <div id="mRawWrap" class="note" style="margin:-8px 0 13px"></div>
     <div class="f"><span>カテゴリ</span><div class="chips" id="mCat"></div></div>
-    <div class="f"><span>用途</span><input type="text" id="mUse" placeholder="自分の言葉でのメモ"></div>
     <button class="btn" id="mSave">保存する</button>
     <button class="btn sub" id="mCancel" style="margin-top:9px">キャンセル</button>
     <button class="btn danger" id="mDel" style="margin-top:9px">この明細を削除</button>
@@ -398,14 +398,14 @@ function renderHeader(){
 
 function itemHtml(it,withChips){
   var h='<div class="item'+(it.status!=='承認済'?' pend':'')+'" data-id="'+esc(it.id)+'">';
-  h+='<div class="top"><span class="shop">'+esc(it.shop||it.use||'(名称なし)')+'</span>'+
+  h+='<div class="top"><span class="shop">'+esc(it.use||it.shop||'(名称なし)')+'</span>'+
      '<span class="amt num">'+yen(it.amount)+'</span></div>';
   h+='<div class="meta"><span>'+esc(it.date.slice(5).replace('-','/'))+' '+esc(it.time)+'</span>'+
      '<span class="tag cat">'+esc(it.category)+'</span>'+
      '<span class="tag">'+esc(it.method)+'</span>';
   if(it.edited) h+='<span class="tag edit">元 '+yen(it.raw)+'</span>';
   if(it.note&&it.note.indexOf('★')===0) h+='<span class="tag dup">重複の可能性</span>';
-  if(it.use) h+='<span>'+esc(it.use)+'</span>';
+  if(it.use&&it.shop&&it.use!==it.shop) h+='<span>'+esc(it.shop)+'</span>';
   h+='</div>';
   if(withChips){
     h+='<div class="chips">';
@@ -413,7 +413,7 @@ function itemHtml(it,withChips){
       if(c==='未分類')return;
       h+='<button class="chip" data-cat="'+esc(c)+'">'+esc(c)+'</button>';
     });
-    h+='<button class="chip ghost" data-detail="1">金額・用途を直す</button></div>';
+    h+='<button class="chip ghost" data-detail="1">名前・金額を直す</button></div>';
   }
   h+='</div>';
   return h;
@@ -552,8 +552,9 @@ $('aSave').addEventListener('click',function(){
 function openEdit(id){
   var it=findItem(id);if(!it)return;
   editId=id;mCat=it.category;
-  $('mShop').textContent=it.shop||it.use||'(名称なし)';
-  $('mSub').textContent=it.date.replace(/-/g,'/')+' '+it.time+'　'+it.method+'　'+it.status;
+  $('mShop').textContent=it.use||it.shop||'(名称なし)';
+  $('mSub').textContent=it.date.replace(/-/g,'/')+' '+it.time+'　'+it.method+
+                        (it.shop?'　元：'+it.shop:'');
   $('mAmt').value=it.amount;
   $('mRawWrap').textContent=it.edited?('元の金額は '+yen(it.raw)+' 円。空欄にすると元に戻ります。')
                                      :('自動記帳された金額は '+yen(it.raw)+' 円です。');

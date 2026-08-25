@@ -19,8 +19,10 @@
   --nav:64px;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-html,body{margin:0;padding:0;height:100%;overflow:hidden;overscroll-behavior:none;}
+html{height:100%;}
+html,body{margin:0;padding:0;overscroll-behavior:none;}
 body{
+  position:fixed;top:0;left:0;right:0;bottom:0;overflow:hidden;
   background:var(--paper);color:var(--ink);
   font-family:"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic Medium","Yu Gothic","Noto Sans JP","Meiryo",sans-serif;
   font-size:16px;line-height:1.5;-webkit-text-size-adjust:100%;
@@ -49,10 +51,12 @@ header{
 
 /* 本体 */
 main{
-  flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
+  flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;
+  -webkit-overflow-scrolling:touch;overscroll-behavior:contain;
   padding:16px 14px 28px;
 }
-main > .pane{max-width:540px;margin:0 auto;}
+main > .pane{max-width:540px;margin:0 auto;width:100%;}
+main > .pane > *{max-width:100%;}
 .pane{display:none;}
 .pane.on{display:block;}
 .lbl{font-size:11.5px;font-weight:700;letter-spacing:.16em;color:var(--dim);margin:0 0 9px 2px;
@@ -119,18 +123,23 @@ main > .pane{max-width:540px;margin:0 auto;}
 }
 
 /* 月の合計 */
-.calsum{display:flex;align-items:baseline;justify-content:space-between;gap:10px;
-  background:var(--card);border:1px solid var(--rule);border-radius:5px;padding:11px 13px;margin-bottom:11px;}
-.calsum .v{font-size:24px;font-weight:800;}
-.calsum .v small{font-size:13px;font-weight:700;margin-left:2px;}
-.calsum .s{font-size:11.5px;color:var(--dim);font-weight:700;text-align:right;line-height:1.5;}
+.calsum{background:var(--card);border:1px solid var(--rule);border-radius:5px;padding:12px 14px;margin-bottom:11px;}
+.cs-main{display:flex;align-items:baseline;flex-wrap:wrap;gap:0 8px;}
+.cs-main .v{font-size:27px;font-weight:800;line-height:1.15;}
+.cs-main .u{font-size:14px;font-weight:700;}
+.cs-pend{font-size:12.5px;font-weight:700;color:var(--warn);}
+.cs-sub{display:flex;justify-content:space-between;gap:10px;margin-top:8px;padding-top:8px;
+  border-top:1px solid var(--rule);font-size:12px;font-weight:600;color:var(--dim);}
+.cs-sub b{font-size:14.5px;font-weight:800;color:var(--ink);}
 
 /* 円グラフ */
 .pie-wrap{display:flex;justify-content:center;padding:4px 0 6px;}
 .pie{width:270px;height:270px;max-width:100%;}
 .pie path{cursor:pointer;}
 .pie .plab{font-size:5.4px;font-weight:800;fill:#fff;text-anchor:middle;pointer-events:none;
-  paint-order:stroke;stroke:rgba(0,0,0,.22);stroke-width:.7px;}
+  paint-order:stroke;stroke:rgba(0,0,0,.25);stroke-width:.75px;}
+.pie .plab.on{font-size:6.4px;}
+.pie path,.pie circle{transition:opacity .18s,d .18s;}
 .pietotal{text-align:center;font-size:12px;font-weight:700;color:var(--dim);margin:0 0 12px;}
 .pietotal b{font-size:20px;font-weight:800;color:var(--ink);margin-left:6px;}
 
@@ -166,7 +175,8 @@ main > .pane{max-width:540px;margin:0 auto;}
 .f{margin-bottom:13px;}
 .f > span{display:block;font-size:11.5px;font-weight:700;color:var(--dim);margin-bottom:6px;letter-spacing:.06em;}
 input[type=text],input[type=number],input[type=date],input[type=time]{
-  width:100%;min-height:52px;padding:0 13px;border:1px solid var(--rule-2);border-radius:5px;
+  width:100%;max-width:100%;min-width:0;min-height:52px;padding:0 13px;
+  border:1px solid var(--rule-2);border-radius:5px;-webkit-appearance:none;appearance:none;
   background:var(--card);color:var(--ink);font-family:inherit;font-size:17px;font-weight:700;
   font-variant-numeric:tabular-nums;
 }
@@ -201,7 +211,6 @@ input::placeholder{color:#bcb3a2;font-weight:600;}
 .cal .d .n{font-size:11px;font-weight:700;color:var(--dim);}
 .cal .d .a{font-size:11px;font-weight:800;color:var(--accent);line-height:1.25;margin-top:2px;word-break:break-all;}
 .cal .d .pn{display:block;font-size:9.5px;font-weight:700;color:var(--warn);}
-.calsum .pend-n{font-size:13px;font-weight:700;color:var(--warn);margin-left:6px;}
 .cal .d.sel{outline:2px solid var(--ink);outline-offset:-2px;}
 
 /* グラフ */
@@ -232,10 +241,15 @@ nav button[aria-current="true"]::before{content:"";position:absolute;top:0;left:
   display:flex;align-items:center;justify-content:center;}
 
 /* モーダル */
-.modal{position:fixed;inset:0;background:rgba(34,32,26,.55);z-index:50;overflow-y:auto;
-  overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:22px 14px 40px;display:none;}
+.modal{position:fixed;inset:0;background:rgba(34,32,26,.55);z-index:50;
+  display:none;align-items:center;justify-content:center;padding:18px 14px;
+  overscroll-behavior:contain;}
+.modal.on{display:flex;}
+#modal{z-index:56;}
+.sheet{width:100%;max-width:520px;max-height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  background:var(--paper);border-radius:10px;padding:16px;box-shadow:0 12px 34px rgba(0,0,0,.32);}
+.lbox{max-height:46vh;overflow-y:auto;-webkit-overflow-scrolling:touch;margin:0 -3px;padding:0 3px;}
 .modal.on{display:block;}
-.sheet{max-width:520px;margin:0 auto;background:var(--paper);border-radius:8px;padding:16px;}
 .sheet h3{margin:0 0 4px;font-size:16px;font-weight:800;}
 .sheet .sub{font-size:12px;color:var(--dim);margin-bottom:14px;font-weight:600;}
 
@@ -287,8 +301,7 @@ nav button[aria-current="true"]::before{content:"";position:absolute;top:0;left:
     </div>
     <div class="calsum" id="calSum"></div>
     <div class="cal" id="cal"></div>
-    <p class="lbl" style="margin-top:20px" id="dayLabel">明細</p>
-    <div id="dayList"></div>
+    <p class="note">日付をタップすると、その日の明細が開きます。</p>
   </section>
 
   <!-- グラフ -->
@@ -302,8 +315,6 @@ nav button[aria-current="true"]::before{content:"";position:absolute;top:0;left:
     <div class="chips" id="gType" style="margin-bottom:14px"></div>
     <div id="pieWrap"></div>
     <div id="catBars"></div>
-    <p class="lbl" style="margin-top:20px" id="catLabel">明細</p>
-    <div id="catList"></div>
     <p class="lbl" style="margin-top:22px">月別の推移</p>
     <div id="monBars"></div>
   </section>
@@ -321,7 +332,7 @@ nav button[aria-current="true"]::before{content:"";position:absolute;top:0;left:
     <p class="lbl" style="margin-top:26px">カテゴリ</p>
     <div id="catEdit"></div>
     <div style="display:flex;gap:8px;margin-top:11px">
-      <input type="text" id="newCat" placeholder="新しいカテゴリ名">
+      <input type="text" id="newCat" placeholder="新しいカテゴリ名" style="min-width:0">
       <button class="btn" id="addCatBtn" style="width:96px;flex:none;min-height:52px;font-size:15px">追加</button>
     </div>
     <button class="btn" id="saveCats" style="margin-top:11px">カテゴリを保存する</button>
@@ -341,6 +352,17 @@ nav button[aria-current="true"]::before{content:"";position:absolute;top:0;left:
   <button data-p="set"><span class="ic">⚙</span>設定</button>
 </nav>
 
+<!-- 明細一覧ポップアップ -->
+<div class="modal" id="listModal">
+  <div class="sheet">
+    <h3 id="lTitle">明細</h3>
+    <div class="sub" id="lSub"></div>
+    <div id="lList" class="lbox"></div>
+    <button class="btn" id="lAdd" style="margin-top:12px">＋ この日に新規作成</button>
+    <button class="btn sub" id="lClose" style="margin-top:9px">閉じる</button>
+  </div>
+</div>
+
 <!-- 編集モーダル -->
 <div class="modal" id="modal">
   <div class="sheet">
@@ -349,6 +371,10 @@ nav button[aria-current="true"]::before{content:"";position:absolute;top:0;left:
     <div class="f"><span>表示名</span><input type="text" id="mUse" placeholder="飲み物＋お菓子 など"></div>
     <div class="f"><span>金額</span><input type="number" id="mAmt" inputmode="numeric"></div>
     <div id="mRawWrap" class="note" style="margin:-8px 0 13px"></div>
+    <div style="display:flex;gap:8px">
+      <div class="f" style="flex:1"><span>日付</span><input type="date" id="mDate"></div>
+      <div class="f" style="width:110px;flex:none"><span>時刻</span><input type="time" id="mTime"></div>
+    </div>
     <div class="f"><span>カテゴリ</span><div class="chips" id="mCat"></div></div>
     <button class="btn" id="mSave">保存する</button>
     <button class="btn sub" id="mCancel" style="margin-top:9px">キャンセル</button>
@@ -480,6 +506,8 @@ function applyUpdate(id,patch){
   if(patch.category!==undefined) it.category=patch.category;
   if(patch.use!==undefined) it.use=patch.use;
   if(patch.status!==undefined) it.status=patch.status;
+  if(patch.date!==undefined) it.date=patch.date;
+  if(patch.time!==undefined) it.time=patch.time;
   if(patch.amount!==undefined){
     if(patch.amount===''){it.amount=it.raw;it.edited=false;}
     else{it.amount=Number(patch.amount);it.edited=true;}
@@ -642,7 +670,7 @@ function removeItem(id){
         DATA.items=DATA.items.filter(function(x){return x.id!==id;});
         ls(K_CACHE,DATA);queue({action:'delete',id:id});
         delete drafts[id];delete adrafts[id];
-        renderAll();toast('削除しました');
+        renderAll();if(lctx) renderList();toast('削除しました');
       });
 }
 
@@ -704,10 +732,11 @@ function renderCal(){
   var pt=sum(pen);
   var days={};mi.forEach(function(it){days[it.date]=1;});
   var nd=Object.keys(days).length;
-  $('calSum').innerHTML='<span class="v num">'+yen(tot)+'<small>円</small>'+
-    (pt?'<span class="pend-n num">（未承認 '+yen(pt)+'）</span>':'')+'</span>'+
-    '<span class="s num">'+mi.length+'件'+(pen.length?'・未承認'+pen.length+'件':'')+
-    ' ／ 支出のあった日 '+nd+'日<br>1日あたり '+yen(nd?tot/nd:0)+'円</span>';
+  $('calSum').innerHTML=
+    '<div class="cs-main"><span class="v num">'+yen(tot)+'</span><span class="u">円</span>'+
+    (pt?'<span class="cs-pend num">未承認 '+yen(pt)+'</span>':'')+'</div>'+
+    '<div class="cs-sub num"><span>支出のあった日　<b>'+nd+'</b>日</span>'+
+    '<span>1日あたり　<b>'+yen(nd?tot/nd:0)+'</b>円</span></div>';
   var y=+view.month.slice(0,4),m=+view.month.slice(5,7)-1;
   var first=new Date(y,m,1),start=new Date(y,m,1-first.getDay());
   var byDay={},penDay={};
@@ -730,27 +759,10 @@ function renderCal(){
          (penDay[k]?'<span class="pn num">('+yen(penDay[k])+')</span>':'')+'</div>':'')+'</div>';
   }
   $('cal').innerHTML=h;
-  renderDayList();
-}
-function renderDayList(){
-  var list;
-  if(view.day){
-    list=DATA.items.filter(function(x){return x.date===view.day;});
-    $('dayLabel').innerHTML=view.day.slice(5).replace('-','/')+' の明細 <span style="letter-spacing:0;font-weight:600">('+yen(sum(list))+'円)</span>';
-  }else{
-    list=monthItems(view.month);
-    $('dayLabel').innerHTML=monLabel(view.month)+' の明細 <span style="letter-spacing:0;font-weight:600">('+list.length+'件)</span>';
-  }
-  $('dayList').innerHTML=list.length?list.map(function(it){return itemHtml(it,false);}).join('')
-                                    :'<div class="empty">明細はありません</div>';
 }
 $('cal').addEventListener('click',function(e){
   var d=e.target.closest('.d');if(!d)return;
-  view.day=(view.day===d.dataset.d)?null:d.dataset.d;
-  renderCal();
-});
-$('dayList').addEventListener('click',function(e){
-  var it=e.target.closest('.item');if(!it)return;openEdit(it.dataset.id);
+  openList('day',d.dataset.d);
 });
 $('mPrev').addEventListener('click',function(){view.month=monShift(view.month,-1);view.day=null;renderCal();renderHeader();});
 $('mNext').addEventListener('click',function(){view.month=monShift(view.month,1);view.day=null;renderCal();renderHeader();});
@@ -773,15 +785,18 @@ function renderChart(){
     $('pieWrap').innerHTML='';
     $('catBars').innerHTML='<div class="empty">データがありません</div>';
   }else if(view.ctype==='pie'){
-    var cx=50,cy=50,ro=42,ri=15,seg='',lab='';
-    var acc=0;
+    var cx=50,cy=50,RO=40,ri=15,seg='',lab='';
+    var acc=0,anySel=!!view.cat;
     arr.forEach(function(p,i){
       var frac=total?p[1]/total:0;
+      var on=(p[0]===view.cat);
+      var ro=on?RO+5:RO;
+      var op=(anySel&&!on)?0.22:1;
       var a0=acc*Math.PI*2-Math.PI/2, a1=(acc+frac)*Math.PI*2-Math.PI/2;
       var mid=(a0+a1)/2;
       if(frac>=0.9999){
-        seg+='<circle cx="'+cx+'" cy="'+cy+'" r="'+((ro+ri)/2)+'" fill="none" '+
-             'stroke="'+PIE[i%PIE.length]+'" stroke-width="'+(ro-ri)+'"></circle>';
+        seg+='<circle cx="'+cx+'" cy="'+cy+'" r="'+((ro+ri)/2)+'" fill="none" opacity="'+op+'" '+
+             'stroke="'+PIE[i%PIE.length]+'" stroke-width="'+(ro-ri)+'" data-cat="'+esc(p[0])+'"></circle>';
       }else{
         var big=(a1-a0)>Math.PI?1:0;
         var x0=cx+ro*Math.cos(a0),y0=cy+ro*Math.sin(a0);
@@ -789,21 +804,20 @@ function renderChart(){
         var x2=cx+ri*Math.cos(a1),y2=cy+ri*Math.sin(a1);
         var x3=cx+ri*Math.cos(a0),y3=cy+ri*Math.sin(a0);
         seg+='<path d="M'+x0.toFixed(2)+' '+y0.toFixed(2)+
-             ' A'+ro+' '+ro+' 0 '+big+' 1 '+x1.toFixed(2)+' '+y1.toFixed(2)+
+             ' A'+ro.toFixed(2)+' '+ro.toFixed(2)+' 0 '+big+' 1 '+x1.toFixed(2)+' '+y1.toFixed(2)+
              ' L'+x2.toFixed(2)+' '+y2.toFixed(2)+
              ' A'+ri+' '+ri+' 0 '+big+' 0 '+x3.toFixed(2)+' '+y3.toFixed(2)+
-             ' Z" fill="'+PIE[i%PIE.length]+'" data-cat="'+esc(p[0])+'"'+
-             (p[0]===view.cat?' stroke="#22201a" stroke-width="1.4"':'')+'></path>';
+             ' Z" fill="'+PIE[i%PIE.length]+'" opacity="'+op+'" data-cat="'+esc(p[0])+'"></path>';
       }
       /* 扇が十分な大きさのときだけ、内側にカテゴリ名を置く */
       if(frac>=0.06){
         var lr=(ro+ri)/2+1;
-        lab+='<text class="plab" x="'+(cx+lr*Math.cos(mid)).toFixed(2)+
+        lab+='<text class="plab'+(on?' on':'')+'" opacity="'+op+'" x="'+(cx+lr*Math.cos(mid)).toFixed(2)+
              '" y="'+(cy+lr*Math.sin(mid)+1.6).toFixed(2)+'">'+esc(p[0])+'</text>';
       }
       acc+=frac;
     });
-    $('pieWrap').innerHTML='<div class="pie-wrap"><svg class="pie" viewBox="0 0 100 100">'+
+    $('pieWrap').innerHTML='<div class="pie-wrap"><svg class="pie" viewBox="-2 -2 104 104">'+
       seg+lab+'</svg></div>'+
       '<p class="pietotal">合計<b class="num">'+yen(total)+'</b>円</p>';
     $('catBars').innerHTML=arr.map(function(p,i){
@@ -824,7 +838,6 @@ function renderChart(){
              '<div class="track"><div class="fill" style="width:'+pct+'%;background:'+PIE[i%PIE.length]+'"></div></div></div>';
     }).join('');
   }
-  renderCatList();
 
   var byMon={};
   DATA.items.forEach(function(it){var k=it.date.slice(0,7);byMon[k]=(byMon[k]||0)+(Number(it.amount)||0);});
@@ -837,31 +850,18 @@ function renderChart(){
            '<div class="track"><div class="fill" style="width:'+w+'%"></div></div></div>';
   }).join(''):'<div class="empty">データがありません</div>';
 }
-function renderCatList(){
-  var lab=$('catLabel'),box=$('catList');
-  if(!view.cat){
-    lab.innerHTML='カテゴリを選ぶと明細が出ます';
-    box.innerHTML='';return;
-  }
-  var list=monthItems(view.gmonth).filter(function(x){return x.category===view.cat;});
-  lab.innerHTML=esc(view.cat)+' の明細 <span style="letter-spacing:0;font-weight:600">('+list.length+'件・'+yen(sum(list))+'円)</span>';
-  box.innerHTML=list.length?list.map(function(it){return itemHtml(it,false);}).join('')
-                           :'<div class="empty">明細はありません</div>';
+function pickCat(name){
+  if(view.cat===name){view.cat=null;renderChart();return;}
+  view.cat=name;renderChart();
+  setTimeout(function(){openList('cat',name);},220);
 }
 $('pieWrap').addEventListener('click',function(e){
   var el=e.target.closest('[data-cat]');if(!el)return;
-  view.cat=(view.cat===el.dataset.cat)?null:el.dataset.cat;
-  renderChart();
-  var t=$('catLabel');
-  if(t&&view.cat) MAIN().scrollTop=t.offsetTop-8;
+  pickCat(el.dataset.cat);
 });
 $('catBars').addEventListener('click',function(e){
   var el=e.target.closest('[data-cat]');if(!el)return;
-  view.cat=(view.cat===el.dataset.cat)?null:el.dataset.cat;
-  renderChart();
-});
-$('catList').addEventListener('click',function(e){
-  var it=e.target.closest('.item');if(!it)return;openEdit(it.dataset.id);
+  pickCat(el.dataset.cat);
 });
 $('gType').addEventListener('click',function(e){
   var b=e.target.closest('.chip');if(!b)return;
@@ -909,6 +909,52 @@ $('aSave').addEventListener('click',function(){
     .catch(function(e){toast('未送信です：'+e.message);});
 });
 
+/* ===== 明細一覧ポップアップ ===== */
+var lctx=null;   // {type:'day'|'cat', key:'...'}
+
+function openList(type,key){
+  lctx={type:type,key:key};
+  renderList();
+  $('listModal').classList.add('on');
+}
+function renderList(){
+  if(!lctx)return;
+  var list,title,sub;
+  if(lctx.type==='day'){
+    list=DATA.items.filter(function(x){return x.date===lctx.key;});
+    var d=new Date(lctx.key+'T00:00:00');
+    title=(d.getMonth()+1)+'月'+d.getDate()+'日（'+'日月火水木金土'[d.getDay()]+'）';
+    $('lAdd').classList.remove('hide');
+  }else{
+    list=monthItems(view.gmonth).filter(function(x){return x.category===lctx.key;});
+    title=lctx.key+'（'+monLabel(view.gmonth)+'）';
+    $('lAdd').classList.add('hide');
+  }
+  sub=list.length?(list.length+'件　合計 '+yen(sum(list))+'円'):'明細はありません';
+  $('lTitle').textContent=title;
+  $('lSub').textContent=sub;
+  $('lList').innerHTML=list.length
+    ? list.map(function(it){return itemHtml(it,false);}).join('')
+    : '<div class="empty">記録がありません</div>';
+}
+$('lList').addEventListener('click',function(e){
+  var it=e.target.closest('.item');if(!it)return;openEdit(it.dataset.id);
+});
+$('lClose').addEventListener('click',function(){
+  $('listModal').classList.remove('on');lctx=null;
+});
+$('listModal').addEventListener('click',function(e){
+  if(e.target===this){this.classList.remove('on');lctx=null;}
+});
+$('lAdd').addEventListener('click',function(){
+  var d=(lctx&&lctx.type==='day')?lctx.key:dayKey(new Date());
+  $('listModal').classList.remove('on');lctx=null;
+  show('add');
+  renderAddForm();
+  $('aDate').value=d;
+  try{$('aAmt').focus();}catch(err){}
+});
+
 /* ===== 編集モーダル ===== */
 function openEdit(id){
   var it=findItem(id);if(!it)return;
@@ -924,6 +970,8 @@ function openEdit(id){
   });
   $('mCat').innerHTML=h;
   $('mUse').value=it.use||'';
+  $('mDate').value=it.date;
+  $('mTime').value=it.time;
   $('modal').classList.add('on');
 }
 $('mCat').addEventListener('click',function(e){
@@ -936,10 +984,17 @@ $('mSave').addEventListener('click',function(){
   var v=$('mAmt').value.trim();
   var patch={category:mCat,use:$('mUse').value.trim(),status:'承認済'};
   patch.amount=(v===''||Number(v)===it.raw)?'':Number(v);
+  var nd=$('mDate').value,nt=$('mTime').value||it.time||'00:00';
+  if(nd&&(nd!==it.date||nt!==it.time)){patch.date=nd;patch.time=nt;}
   applyUpdate(editId,patch);
-  $('modal').classList.remove('on');toast('保存しました');
+  $('modal').classList.remove('on');
+  if(lctx) renderList();
+  toast('保存しました');
 });
 $('mCancel').addEventListener('click',function(){$('modal').classList.remove('on');});
+$('modal').addEventListener('click',function(e){
+  if(e.target===this) this.classList.remove('on');
+});
 $('mDel').addEventListener('click',function(){
   var id=editId;
   $('modal').classList.remove('on');

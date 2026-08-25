@@ -19,17 +19,18 @@
   --nav:64px;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-html,body{margin:0;padding:0;}
+html,body{margin:0;padding:0;height:100%;overflow:hidden;overscroll-behavior:none;}
 body{
   background:var(--paper);color:var(--ink);
   font-family:"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic Medium","Yu Gothic","Noto Sans JP","Meiryo",sans-serif;
   font-size:16px;line-height:1.5;-webkit-text-size-adjust:100%;
+  display:flex;flex-direction:column;
 }
 .num{font-variant-numeric:tabular-nums;}
 
 /* ヘッダ */
 header{
-  position:sticky;top:0;z-index:30;background:var(--ink);color:var(--paper);
+  flex:none;background:var(--ink);color:var(--paper);
   padding:calc(env(safe-area-inset-top) + 12px) 16px 12px;
 }
 .hrow{display:flex;align-items:center;justify-content:space-between;gap:10px;}
@@ -47,7 +48,11 @@ header{
 .hsum .rule{height:3px;border-top:1px solid rgba(246,242,233,.35);border-bottom:1px solid rgba(246,242,233,.35);margin-top:7px;}
 
 /* 本体 */
-main{padding:16px 14px calc(var(--nav) + env(safe-area-inset-bottom) + 24px);max-width:540px;margin:0 auto;}
+main{
+  flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
+  padding:16px 14px 28px;
+}
+main > .pane{max-width:540px;margin:0 auto;}
 .pane{display:none;}
 .pane.on{display:block;}
 .lbl{font-size:11.5px;font-weight:700;letter-spacing:.16em;color:var(--dim);margin:0 0 9px 2px;
@@ -210,7 +215,7 @@ input::placeholder{color:#bcb3a2;font-weight:600;}
 
 /* 下部ナビ */
 nav{
-  position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--card);
+  flex:none;background:var(--card);
   border-top:1px solid var(--rule-2);display:grid;grid-template-columns:repeat(5,1fr);
   padding-bottom:env(safe-area-inset-bottom);
 }
@@ -227,13 +232,14 @@ nav button[aria-current="true"]::before{content:"";position:absolute;top:0;left:
   display:flex;align-items:center;justify-content:center;}
 
 /* モーダル */
-.modal{position:fixed;inset:0;background:rgba(34,32,26,.55);z-index:50;overflow-y:auto;padding:22px 14px 40px;display:none;}
+.modal{position:fixed;inset:0;background:rgba(34,32,26,.55);z-index:50;overflow-y:auto;
+  overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:22px 14px 40px;display:none;}
 .modal.on{display:block;}
 .sheet{max-width:520px;margin:0 auto;background:var(--paper);border-radius:8px;padding:16px;}
 .sheet h3{margin:0 0 4px;font-size:16px;font-weight:800;}
 .sheet .sub{font-size:12px;color:var(--dim);margin-bottom:14px;font-weight:600;}
 
-.toast{position:fixed;left:50%;bottom:calc(var(--nav) + 18px);transform:translateX(-50%) translateY(14px);
+.toast{position:fixed;left:50%;bottom:calc(var(--nav) + env(safe-area-inset-bottom) + 18px);transform:translateX(-50%) translateY(14px);
   background:var(--ink);color:var(--paper);padding:11px 20px;border-radius:99px;font-size:13.5px;font-weight:700;
   opacity:0;pointer-events:none;transition:all .2s;z-index:60;max-width:88%;text-align:center;}
 .toast.on{opacity:1;transform:translateX(-50%) translateY(0);}
@@ -390,6 +396,7 @@ var editId=null,addCat='外食',addMethod='現金',mCat='',drafts={};
 
 /* ===== 小物 ===== */
 function $(i){return document.getElementById(i);}
+function MAIN(){return document.querySelector('main');}
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
 function yen(n){return Math.round(Number(n)||0).toLocaleString();}
 function toast(m){var t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(t._t);t._t=setTimeout(function(){t.classList.remove('on');},2200);}
@@ -469,7 +476,7 @@ function findItem(id){
 }
 function applyUpdate(id,patch){
   var it=findItem(id);if(!it)return;
-  var sy=window.scrollY;
+  var sy=MAIN().scrollTop;
   if(patch.category!==undefined) it.category=patch.category;
   if(patch.use!==undefined) it.use=patch.use;
   if(patch.status!==undefined) it.status=patch.status;
@@ -482,7 +489,7 @@ function applyUpdate(id,patch){
   for(var k in patch) op[k]=patch[k];
   queue(op);
   renderAll();
-  window.scrollTo(0,sy);
+  MAIN().scrollTop=sy;
 }
 
 /* ===== 画面切替 ===== */
@@ -490,7 +497,7 @@ function show(p){
   view.pane=p;
   document.querySelectorAll('.pane').forEach(function(el){el.classList.toggle('on',el.id==='p-'+p);});
   document.querySelectorAll('nav button').forEach(function(b){b.setAttribute('aria-current',b.dataset.p===p?'true':'false');});
-  window.scrollTo(0,0);
+  MAIN().scrollTop=0;
   renderHeader();
 }
 document.querySelector('nav').addEventListener('click',function(e){
@@ -588,9 +595,9 @@ $('pendList').addEventListener('click',function(e){
   var wrap=e.target.closest('.item');if(!wrap)return;
   var id=wrap.dataset.id;
   if(e.target.closest('[data-more]')){
-    var sy=window.scrollY;
+    var sy=MAIN().scrollTop;
     expanded[id]=!expanded[id];
-    renderPending();window.scrollTo(0,sy);
+    renderPending();MAIN().scrollTop=sy;
     return;
   }
   if(e.target.closest('[data-detail]')){openEdit(id);return;}
@@ -845,7 +852,8 @@ $('pieWrap').addEventListener('click',function(e){
   var el=e.target.closest('[data-cat]');if(!el)return;
   view.cat=(view.cat===el.dataset.cat)?null:el.dataset.cat;
   renderChart();
-  var t=$('catLabel');if(t&&view.cat) t.scrollIntoView({behavior:'smooth',block:'start'});
+  var t=$('catLabel');
+  if(t&&view.cat) MAIN().scrollTop=t.offsetTop-8;
 });
 $('catBars').addEventListener('click',function(e){
   var el=e.target.closest('[data-cat]');if(!el)return;
@@ -1025,9 +1033,9 @@ $('saveCats').addEventListener('click',function(){
 
 /* ===== まとめて描画 ===== */
 function renderAll(){
-  var sy=window.scrollY;
+  var sy=MAIN().scrollTop;
   renderPending();renderCal();renderChart();renderAddForm();renderSettings();renderCatEdit();renderHeader();
-  if(Math.abs(window.scrollY-sy)>1) window.scrollTo(0,sy);
+  if(Math.abs(MAIN().scrollTop-sy)>1) MAIN().scrollTop=sy;
 }
 
 /* ===== 起動 ===== */

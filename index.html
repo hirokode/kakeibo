@@ -6,6 +6,10 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#22201a">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-title" content="家計簿">
 <title>家計簿</title>
 <style>
 :root{
@@ -75,21 +79,11 @@ main{padding:16px 14px calc(var(--nav) + env(safe-area-inset-bottom) + 24px);max
 .chip.ghost{background:transparent;color:var(--dim);border-style:dashed;}
 .chip.ok{background:var(--ok);color:#fff;border-color:var(--ok);}
 .chip.del{background:transparent;color:var(--accent);border-color:#e3b3a9;}
-.chiprow{
-  display:flex;gap:6px;margin-top:9px;overflow-x:auto;padding-bottom:8px;
-  -webkit-overflow-scrolling:touch;scrollbar-color:var(--rule-2) transparent;
-}
-.chiprow::-webkit-scrollbar{height:7px;}
-.chiprow::-webkit-scrollbar-track{background:var(--paper);border-radius:4px;}
-.chiprow::-webkit-scrollbar-thumb{background:var(--rule-2);border-radius:4px;}
-.chiprow::-webkit-scrollbar-thumb:hover{background:var(--dim);}
+.chiprow{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px;}
 .chiprow .chip{flex:none;}
+.chiprow .chip.hid{display:none;}
+.chip.more{background:transparent;color:var(--dim);border-style:dashed;}
 .chipwrap{position:relative;}
-.chipwrap::after{
-  content:"";position:absolute;top:0;right:0;bottom:8px;width:26px;pointer-events:none;
-  background:linear-gradient(to right,rgba(255,253,248,0),var(--card));opacity:1;transition:opacity .15s;
-}
-.chipwrap.end::after{opacity:0;}
 
 /* 確認ダイアログ */
 .confirm{position:fixed;inset:0;background:rgba(34,32,26,.55);z-index:70;
@@ -545,12 +539,16 @@ function itemHtml(it,withChips){
     h+='<input type="text" class="rename" data-r="1" placeholder="表示名（例：飲み物＋お菓子）" value="'+esc(dv)+'">';
     h+='<div class="chipwrap"><div class="chiprow">';
     h+='<button class="chip ok" data-ok="1">✓ 承認</button>';
-    cats().forEach(function(c){
-      if(c==='未分類')return;
-      h+='<button class="chip" data-cat="'+esc(c)+'"'+(c===it.category?' aria-pressed="true"':'')+'>'+esc(c)+'</button>';
+    var cs=cats().filter(function(c){return c!=='未分類';});
+    var open=(expanded[it.id]===true),TOP=4;
+    cs.forEach(function(c,i){
+      h+='<button class="chip'+((!open&&i>=TOP)?' hid':'')+'" data-cat="'+esc(c)+'"'+
+         (c===it.category?' aria-pressed="true"':'')+'>'+esc(c)+'</button>';
     });
-    h+='<button class="chip ghost" data-detail="1">詳しく</button>';
-    h+='<button class="chip del" data-del="1">削除</button>';
+    if(cs.length>TOP)
+      h+='<button class="chip more" data-more="1">'+(open?'閉じる ▲':'ほか'+(cs.length-TOP)+'件 ▼')+'</button>';
+    h+='<button class="chip ghost'+((!open)?' hid':'')+'" data-detail="1">詳しく</button>';
+    h+='<button class="chip del'+((!open)?' hid':'')+'" data-del="1">削除</button>';
     h+='</div></div>';
   }
   h+='</div>';
@@ -571,7 +569,7 @@ function renderPending(){
            '<div class="slide">'+itemHtml(it,true)+'</div></div>';
   }).join('');
 }
-var drafts={},adrafts={};
+var drafts={},adrafts={},expanded={};
 $('pendList').addEventListener('input',function(e){
   var w=e.target.closest('.item');if(!w)return;
   if(e.target.closest('[data-r]')) drafts[w.dataset.id]=e.target.value;
@@ -589,6 +587,12 @@ $('pendList').addEventListener('click',function(e){
   }
   var wrap=e.target.closest('.item');if(!wrap)return;
   var id=wrap.dataset.id;
+  if(e.target.closest('[data-more]')){
+    var sy=window.scrollY;
+    expanded[id]=!expanded[id];
+    renderPending();window.scrollTo(0,sy);
+    return;
+  }
   if(e.target.closest('[data-detail]')){openEdit(id);return;}
   var c=e.target.closest('[data-cat]'),ok=e.target.closest('[data-ok]');
   if(!c&&!ok)return;
@@ -606,22 +610,6 @@ $('pendList').addEventListener('click',function(e){
   applyUpdate(id,patch);
   toast('承認しました');
 });
-
-/* PC：ホイールでカテゴリ行を横に送る／右端のぼかし制御 */
-$('pendList').addEventListener('wheel',function(e){
-  var row=e.target.closest('.chiprow');if(!row)return;
-  if(Math.abs(e.deltaY)<=Math.abs(e.deltaX))return;
-  var max=row.scrollWidth-row.clientWidth;
-  if(max<=0)return;
-  var next=row.scrollLeft+e.deltaY;
-  if(next>0&&next<max) e.preventDefault();
-  row.scrollLeft=next;
-},{passive:false});
-$('pendList').addEventListener('scroll',function(e){
-  var row=e.target;
-  if(!row.classList||!row.classList.contains('chiprow'))return;
-  row.parentElement.classList.toggle('end',row.scrollLeft>=row.scrollWidth-row.clientWidth-2);
-},true);
 
 /* 確認ダイアログ */
 var cbAction=null;

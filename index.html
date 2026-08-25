@@ -127,10 +127,24 @@ main{padding:16px 14px calc(var(--nav) + env(safe-area-inset-bottom) + 24px);max
 .calsum .s{font-size:11.5px;color:var(--dim);font-weight:700;text-align:right;line-height:1.5;}
 
 /* 円グラフ */
-.pie-wrap{display:flex;justify-content:center;padding:6px 0 14px;}
-.pie{width:210px;height:210px;}
-.pie .ctr{font-size:9px;font-weight:800;fill:var(--ink);text-anchor:middle;}
-.pie .ctr.s{font-size:4.6px;font-weight:700;fill:var(--dim);}
+.pie-wrap{display:flex;justify-content:center;padding:4px 0 6px;}
+.pie{width:270px;height:270px;max-width:100%;}
+.pie path{cursor:pointer;}
+.pie .plab{font-size:5.4px;font-weight:800;fill:#fff;text-anchor:middle;pointer-events:none;
+  paint-order:stroke;stroke:rgba(0,0,0,.22);stroke-width:.7px;}
+.pietotal{text-align:center;font-size:12px;font-weight:700;color:var(--dim);margin:0 0 12px;}
+.pietotal b{font-size:20px;font-weight:800;color:var(--ink);margin-left:6px;}
+
+/* カテゴリ編集 */
+.crow{display:flex;align-items:center;gap:7px;background:var(--card);border:1px solid var(--rule);
+  border-radius:5px;padding:7px 9px;margin-bottom:7px;}
+.crow .sw{width:12px;height:12px;border-radius:2px;flex:none;}
+.crow .nm{flex:1;min-width:0;font-size:15.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.crow button{width:38px;height:38px;flex:none;border:1px solid var(--rule-2);background:var(--paper);
+  border-radius:4px;font-size:15px;color:var(--ink);cursor:pointer;padding:0;}
+.crow button:disabled{opacity:.25;cursor:not-allowed;}
+.crow button.x{color:var(--accent);border-color:#e3b3a9;}
+.crow.fixed .nm{color:var(--dim);}
 .leg{display:flex;align-items:center;gap:9px;padding:8px 8px;border-bottom:1px solid var(--rule);cursor:pointer;border-radius:4px;}
 .leg:last-child{border-bottom:0;}
 .leg.sel{background:var(--card);outline:2px solid var(--ink);outline-offset:-2px;}
@@ -304,6 +318,15 @@ nav button[aria-current="true"]::before{content:"";position:absolute;top:0;left:
     <p class="note" id="sInfo"></p>
     <p class="lbl" style="margin-top:26px">表示</p>
     <div class="f"><span>読み込む期間</span><div class="chips" id="sRange"></div></div>
+    <p class="lbl" style="margin-top:26px">カテゴリ</p>
+    <div id="catEdit"></div>
+    <div style="display:flex;gap:8px;margin-top:11px">
+      <input type="text" id="newCat" placeholder="新しいカテゴリ名">
+      <button class="btn" id="addCatBtn" style="width:96px;flex:none;min-height:52px;font-size:15px">追加</button>
+    </div>
+    <button class="btn" id="saveCats" style="margin-top:11px">カテゴリを保存する</button>
+    <p class="note">上下の矢印で並び替えられます。ここでの並びがそのままアプリに反映されます。「未分類」は自動記帳が使うため消せません。</p>
+
     <p class="lbl" style="margin-top:26px">データ</p>
     <button class="btn sub" id="sClear">端末のキャッシュを消す</button>
     <p class="note">スプレッドシートのデータは消えません。次回の同期で取り直します。</p>
@@ -416,6 +439,7 @@ function sync(silent){
     .then(function(d){
       DATA={items:d.items||[],cats:d.categories||[],at:Date.now()};
       ls(K_CACHE,DATA);
+      catDraft=null;
       setDot('','同期済 '+new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}));
       renderAll();
       if(!silent) toast('同期しました（'+DATA.items.length+'件）');
@@ -754,17 +778,39 @@ function renderChart(){
     $('pieWrap').innerHTML='';
     $('catBars').innerHTML='<div class="empty">データがありません</div>';
   }else if(view.ctype==='pie'){
-    var R=15.9155,C=2*Math.PI*R,off=0,seg='';
+    var cx=50,cy=50,ro=42,ri=15,seg='',lab='';
+    var acc=0;
     arr.forEach(function(p,i){
       var frac=total?p[1]/total:0;
-      seg+='<circle cx="21" cy="21" r="'+R+'" fill="none" stroke="'+PIE[i%PIE.length]+'" stroke-width="8" '+
-           'stroke-dasharray="'+(frac*C).toFixed(3)+' '+((1-frac)*C).toFixed(3)+'" '+
-           'stroke-dashoffset="'+(C*0.25-off*C).toFixed(3)+'"></circle>';
-      off+=frac;
+      var a0=acc*Math.PI*2-Math.PI/2, a1=(acc+frac)*Math.PI*2-Math.PI/2;
+      var mid=(a0+a1)/2;
+      if(frac>=0.9999){
+        seg+='<circle cx="'+cx+'" cy="'+cy+'" r="'+((ro+ri)/2)+'" fill="none" '+
+             'stroke="'+PIE[i%PIE.length]+'" stroke-width="'+(ro-ri)+'"></circle>';
+      }else{
+        var big=(a1-a0)>Math.PI?1:0;
+        var x0=cx+ro*Math.cos(a0),y0=cy+ro*Math.sin(a0);
+        var x1=cx+ro*Math.cos(a1),y1=cy+ro*Math.sin(a1);
+        var x2=cx+ri*Math.cos(a1),y2=cy+ri*Math.sin(a1);
+        var x3=cx+ri*Math.cos(a0),y3=cy+ri*Math.sin(a0);
+        seg+='<path d="M'+x0.toFixed(2)+' '+y0.toFixed(2)+
+             ' A'+ro+' '+ro+' 0 '+big+' 1 '+x1.toFixed(2)+' '+y1.toFixed(2)+
+             ' L'+x2.toFixed(2)+' '+y2.toFixed(2)+
+             ' A'+ri+' '+ri+' 0 '+big+' 0 '+x3.toFixed(2)+' '+y3.toFixed(2)+
+             ' Z" fill="'+PIE[i%PIE.length]+'" data-cat="'+esc(p[0])+'"'+
+             (p[0]===view.cat?' stroke="#22201a" stroke-width="1.4"':'')+'></path>';
+      }
+      /* 扇が十分な大きさのときだけ、内側にカテゴリ名を置く */
+      if(frac>=0.06){
+        var lr=(ro+ri)/2+1;
+        lab+='<text class="plab" x="'+(cx+lr*Math.cos(mid)).toFixed(2)+
+             '" y="'+(cy+lr*Math.sin(mid)+1.6).toFixed(2)+'">'+esc(p[0])+'</text>';
+      }
+      acc+=frac;
     });
-    $('pieWrap').innerHTML='<div class="pie-wrap"><svg class="pie" viewBox="0 0 42 42">'+seg+
-      '<text class="ctr" x="21" y="21.5">'+yen(total)+'</text>'+
-      '<text class="ctr s" x="21" y="26">円</text></svg></div>';
+    $('pieWrap').innerHTML='<div class="pie-wrap"><svg class="pie" viewBox="0 0 100 100">'+
+      seg+lab+'</svg></div>'+
+      '<p class="pietotal">合計<b class="num">'+yen(total)+'</b>円</p>';
     $('catBars').innerHTML=arr.map(function(p,i){
       var pct=total?Math.round(p[1]/total*1000)/10:0;
       return '<div class="leg'+(p[0]===view.cat?' sel':'')+'" data-cat="'+esc(p[0])+'">'+
@@ -807,6 +853,12 @@ function renderCatList(){
   box.innerHTML=list.length?list.map(function(it){return itemHtml(it,false);}).join('')
                            :'<div class="empty">明細はありません</div>';
 }
+$('pieWrap').addEventListener('click',function(e){
+  var el=e.target.closest('[data-cat]');if(!el)return;
+  view.cat=(view.cat===el.dataset.cat)?null:el.dataset.cat;
+  renderChart();
+  var t=$('catLabel');if(t&&view.cat) t.scrollIntoView({behavior:'smooth',block:'start'});
+});
 $('catBars').addEventListener('click',function(e){
   var el=e.target.closest('[data-cat]');if(!el)return;
   view.cat=(view.cat===el.dataset.cat)?null:el.dataset.cat;
@@ -930,10 +982,63 @@ $('sClear').addEventListener('click',function(){
     });
 });
 
+/* ===== カテゴリ編集 ===== */
+var catDraft=null;
+function renderCatEdit(){
+  if(!catDraft) catDraft=cats().slice();
+  $('catEdit').innerHTML=catDraft.map(function(c,i){
+    var fixed=(c==='未分類');
+    return '<div class="crow'+(fixed?' fixed':'')+'" data-i="'+i+'">'+
+      '<span class="sw" style="background:'+PIE[i%PIE.length]+'"></span>'+
+      '<span class="nm">'+esc(c)+'</span>'+
+      '<button data-up="1"'+(i===0?' disabled':'')+' aria-label="上へ">↑</button>'+
+      '<button data-down="1"'+(i===catDraft.length-1?' disabled':'')+' aria-label="下へ">↓</button>'+
+      '<button class="x" data-x="1"'+(fixed?' disabled':'')+' aria-label="削除">×</button></div>';
+  }).join('');
+}
+$('catEdit').addEventListener('click',function(e){
+  var row=e.target.closest('.crow');if(!row)return;
+  var i=+row.dataset.i,t;
+  if(e.target.closest('[data-up]')&&i>0){
+    t=catDraft[i-1];catDraft[i-1]=catDraft[i];catDraft[i]=t;
+  }else if(e.target.closest('[data-down]')&&i<catDraft.length-1){
+    t=catDraft[i+1];catDraft[i+1]=catDraft[i];catDraft[i]=t;
+  }else if(e.target.closest('[data-x]')){
+    var name=catDraft[i];
+    var used=DATA.items.filter(function(x){return x.category===name;}).length;
+    if(used){
+      ask('このカテゴリを消しますか？',
+          '「'+name+'」を使っている明細が'+used+'件あります。消しても明細は残りますが、そのカテゴリ名のまま集計されます。',
+          function(){catDraft.splice(i,1);renderCatEdit();});
+      return;
+    }
+    catDraft.splice(i,1);
+  }else return;
+  renderCatEdit();
+});
+$('addCatBtn').addEventListener('click',function(){
+  var v=$('newCat').value.trim();
+  if(!v){toast('カテゴリ名を入力してください');return;}
+  if(catDraft.indexOf(v)!==-1){toast('同じ名前があります');return;}
+  var at=catDraft.indexOf('未分類');
+  if(at===-1) catDraft.push(v); else catDraft.splice(at,0,v);
+  $('newCat').value='';renderCatEdit();
+});
+$('saveCats').addEventListener('click',function(){
+  var list=catDraft.slice();
+  apiPost({action:'setcats',cats:list})
+    .then(function(d){
+      DATA.cats=d.categories||list;ls(K_CACHE,DATA);
+      catDraft=DATA.cats.slice();
+      renderAll();toast('カテゴリを保存しました');
+    })
+    .catch(function(e){toast('保存できません：'+e.message);});
+});
+
 /* ===== まとめて描画 ===== */
 function renderAll(){
   var sy=window.scrollY;
-  renderPending();renderCal();renderChart();renderAddForm();renderSettings();renderHeader();
+  renderPending();renderCal();renderChart();renderAddForm();renderSettings();renderCatEdit();renderHeader();
   if(Math.abs(window.scrollY-sy)>1) window.scrollTo(0,sy);
 }
 

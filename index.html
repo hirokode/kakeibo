@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#22201a">
@@ -131,8 +131,9 @@ main{padding:16px 14px calc(var(--nav) + env(safe-area-inset-bottom) + 24px);max
 .pie{width:210px;height:210px;}
 .pie .ctr{font-size:9px;font-weight:800;fill:var(--ink);text-anchor:middle;}
 .pie .ctr.s{font-size:4.6px;font-weight:700;fill:var(--dim);}
-.leg{display:flex;align-items:center;gap:9px;padding:8px 2px;border-bottom:1px solid var(--rule);}
+.leg{display:flex;align-items:center;gap:9px;padding:8px 8px;border-bottom:1px solid var(--rule);cursor:pointer;border-radius:4px;}
 .leg:last-child{border-bottom:0;}
+.leg.sel{background:var(--card);outline:2px solid var(--ink);outline-offset:-2px;}
 .leg .sw{width:12px;height:12px;border-radius:2px;flex:none;}
 .leg .nm{flex:1;min-width:0;font-size:14px;font-weight:700;}
 .leg .va{font-size:14px;font-weight:800;}
@@ -167,7 +168,7 @@ input.amtin:focus{border-color:var(--ink);background:var(--card);}
 input.amtin.chg{border-color:var(--warn);background:#fdf6e6;}
 input.rename{
   width:100%;min-height:44px;margin-top:9px;padding:0 11px;border:1px solid var(--rule-2);
-  border-radius:4px;background:var(--paper);font-size:14.5px;font-weight:700;
+  border-radius:4px;background:var(--paper);font-size:16px;font-weight:700;
 }
 input.rename:focus{border-color:var(--ink);background:var(--card);}
 input::placeholder{color:#bcb3a2;font-weight:600;}
@@ -186,14 +187,18 @@ input::placeholder{color:#bcb3a2;font-weight:600;}
 .cal .d.today .n{background:var(--ink);color:var(--card);border-radius:3px;padding:0 4px;}
 .cal .d .n{font-size:11px;font-weight:700;color:var(--dim);}
 .cal .d .a{font-size:11px;font-weight:800;color:var(--accent);line-height:1.25;margin-top:2px;word-break:break-all;}
+.cal .d .pn{display:block;font-size:9.5px;font-weight:700;color:var(--warn);}
+.calsum .pend-n{font-size:13px;font-weight:700;color:var(--warn);margin-left:6px;}
 .cal .d.sel{outline:2px solid var(--ink);outline-offset:-2px;}
 
 /* グラフ */
-.bar{margin-bottom:11px;}
+.bar{margin:0 -6px 11px;padding:2px 6px;border-radius:4px;}
 .bar .r1{display:flex;justify-content:space-between;font-size:13.5px;font-weight:700;margin-bottom:4px;}
 .bar .r1 .p{color:var(--dim);font-size:11.5px;font-weight:700;}
 .bar .track{height:9px;background:var(--rule);border-radius:2px;overflow:hidden;}
 .bar .fill{height:100%;background:var(--ink);}
+#catBars .bar{cursor:pointer;}
+#catBars .bar.sel{background:var(--card);outline:2px solid var(--ink);outline-offset:-2px;}
 
 /* 下部ナビ */
 nav{
@@ -283,6 +288,8 @@ nav button[aria-current="true"]::before{content:"";position:absolute;top:0;left:
     <div class="chips" id="gType" style="margin-bottom:14px"></div>
     <div id="pieWrap"></div>
     <div id="catBars"></div>
+    <p class="lbl" style="margin-top:20px" id="catLabel">明細</p>
+    <div id="catList"></div>
     <p class="lbl" style="margin-top:22px">月別の推移</p>
     <div id="monBars"></div>
   </section>
@@ -360,7 +367,7 @@ var QUEUE=ls(K_QUEUE)||[];
 var METHODS=['現金','Suica','PayPay','楽天ペイ','カード','その他'];
 var RANGES=[[90,'3か月'],[365,'1年'],[1095,'3年'],[0,'全期間']];
 
-var view={pane:'approve',month:monKey(new Date()),gmonth:monKey(new Date()),day:null,
+var view={pane:'approve',month:monKey(new Date()),gmonth:monKey(new Date()),day:null,cat:null,
           ctype:(CFG.ctype||'pie')};
 var editId=null,addCat='外食',addMethod='現金',mCat='',drafts={};
 
@@ -444,6 +451,7 @@ function findItem(id){
 }
 function applyUpdate(id,patch){
   var it=findItem(id);if(!it)return;
+  var sy=window.scrollY;
   if(patch.category!==undefined) it.category=patch.category;
   if(patch.use!==undefined) it.use=patch.use;
   if(patch.status!==undefined) it.status=patch.status;
@@ -456,6 +464,7 @@ function applyUpdate(id,patch){
   for(var k in patch) op[k]=patch[k];
   queue(op);
   renderAll();
+  window.scrollTo(0,sy);
 }
 
 /* ===== 画面切替 ===== */
@@ -672,15 +681,21 @@ function removeItem(id){
 function renderCal(){
   $('mLabel').textContent=monLabel(view.month);
   var mi=monthItems(view.month),tot=sum(mi);
+  var pen=mi.filter(function(x){return x.status!=='承認済';});
+  var pt=sum(pen);
   var days={};mi.forEach(function(it){days[it.date]=1;});
   var nd=Object.keys(days).length;
-  $('calSum').innerHTML='<span class="v num">'+yen(tot)+'<small>円</small></span>'+
-    '<span class="s num">'+mi.length+'件 ／ 支出のあった日 '+nd+'日<br>'+
-    '1日あたり '+yen(nd?tot/nd:0)+'円</span>';
+  $('calSum').innerHTML='<span class="v num">'+yen(tot)+'<small>円</small>'+
+    (pt?'<span class="pend-n num">（未承認 '+yen(pt)+'）</span>':'')+'</span>'+
+    '<span class="s num">'+mi.length+'件'+(pen.length?'・未承認'+pen.length+'件':'')+
+    ' ／ 支出のあった日 '+nd+'日<br>1日あたり '+yen(nd?tot/nd:0)+'円</span>';
   var y=+view.month.slice(0,4),m=+view.month.slice(5,7)-1;
   var first=new Date(y,m,1),start=new Date(y,m,1-first.getDay());
-  var byDay={};
-  monthItems(view.month).forEach(function(it){byDay[it.date]=(byDay[it.date]||0)+(Number(it.amount)||0);});
+  var byDay={},penDay={};
+  monthItems(view.month).forEach(function(it){
+    byDay[it.date]=(byDay[it.date]||0)+(Number(it.amount)||0);
+    if(it.status!=='承認済') penDay[it.date]=(penDay[it.date]||0)+(Number(it.amount)||0);
+  });
   var todayK=dayKey(new Date());
   var h='';
   ['日','月','火','水','木','金','土'].forEach(function(d,i){
@@ -692,7 +707,8 @@ function renderCal(){
     if(i>=35&&out) continue;
     h+='<div class="d'+(out?' out':'')+(k===todayK?' today':'')+(k===view.day?' sel':'')+'" data-d="'+k+'">'+
        '<div class="n">'+d.getDate()+'</div>'+
-       (byDay[k]?'<div class="a num">'+yen(byDay[k])+'</div>':'')+'</div>';
+       (byDay[k]?'<div class="a num">'+yen(byDay[k])+
+         (penDay[k]?'<span class="pn num">('+yen(penDay[k])+')</span>':'')+'</div>':'')+'</div>';
   }
   $('cal').innerHTML=h;
   renderDayList();
@@ -751,7 +767,8 @@ function renderChart(){
       '<text class="ctr s" x="21" y="26">円</text></svg></div>';
     $('catBars').innerHTML=arr.map(function(p,i){
       var pct=total?Math.round(p[1]/total*1000)/10:0;
-      return '<div class="leg"><span class="sw" style="background:'+PIE[i%PIE.length]+'"></span>'+
+      return '<div class="leg'+(p[0]===view.cat?' sel':'')+'" data-cat="'+esc(p[0])+'">'+
+             '<span class="sw" style="background:'+PIE[i%PIE.length]+'"></span>'+
              '<span class="nm">'+esc(p[0])+'</span>'+
              '<span class="va num">'+yen(p[1])+'</span>'+
              '<span class="pc num">'+pct+'%</span></div>';
@@ -760,11 +777,13 @@ function renderChart(){
     $('pieWrap').innerHTML='';
     $('catBars').innerHTML=arr.map(function(p,i){
       var pct=total?Math.round(p[1]/total*1000)/10:0;
-      return '<div class="bar"><div class="r1"><span>'+esc(p[0])+'</span>'+
+      return '<div class="bar'+(p[0]===view.cat?' sel':'')+'" data-cat="'+esc(p[0])+'">'+
+             '<div class="r1"><span>'+esc(p[0])+'</span>'+
              '<span class="num">'+yen(p[1])+'<span class="p"> '+pct+'%</span></span></div>'+
              '<div class="track"><div class="fill" style="width:'+pct+'%;background:'+PIE[i%PIE.length]+'"></div></div></div>';
     }).join('');
   }
+  renderCatList();
 
   var byMon={};
   DATA.items.forEach(function(it){var k=it.date.slice(0,7);byMon[k]=(byMon[k]||0)+(Number(it.amount)||0);});
@@ -777,12 +796,31 @@ function renderChart(){
            '<div class="track"><div class="fill" style="width:'+w+'%"></div></div></div>';
   }).join(''):'<div class="empty">データがありません</div>';
 }
+function renderCatList(){
+  var lab=$('catLabel'),box=$('catList');
+  if(!view.cat){
+    lab.innerHTML='カテゴリを選ぶと明細が出ます';
+    box.innerHTML='';return;
+  }
+  var list=monthItems(view.gmonth).filter(function(x){return x.category===view.cat;});
+  lab.innerHTML=esc(view.cat)+' の明細 <span style="letter-spacing:0;font-weight:600">('+list.length+'件・'+yen(sum(list))+'円)</span>';
+  box.innerHTML=list.length?list.map(function(it){return itemHtml(it,false);}).join('')
+                           :'<div class="empty">明細はありません</div>';
+}
+$('catBars').addEventListener('click',function(e){
+  var el=e.target.closest('[data-cat]');if(!el)return;
+  view.cat=(view.cat===el.dataset.cat)?null:el.dataset.cat;
+  renderChart();
+});
+$('catList').addEventListener('click',function(e){
+  var it=e.target.closest('.item');if(!it)return;openEdit(it.dataset.id);
+});
 $('gType').addEventListener('click',function(e){
   var b=e.target.closest('.chip');if(!b)return;
   view.ctype=b.dataset.t;CFG.ctype=view.ctype;ls(K_CFG,CFG);renderChart();
 });
-$('gPrev').addEventListener('click',function(){view.gmonth=monShift(view.gmonth,-1);renderChart();renderHeader();});
-$('gNext').addEventListener('click',function(){view.gmonth=monShift(view.gmonth,1);renderChart();renderHeader();});
+$('gPrev').addEventListener('click',function(){view.gmonth=monShift(view.gmonth,-1);view.cat=null;renderChart();renderHeader();});
+$('gNext').addEventListener('click',function(){view.gmonth=monShift(view.gmonth,1);view.cat=null;renderChart();renderHeader();});
 
 function renderAddForm(){
   var h='';cats().forEach(function(c){
@@ -894,7 +932,9 @@ $('sClear').addEventListener('click',function(){
 
 /* ===== まとめて描画 ===== */
 function renderAll(){
+  var sy=window.scrollY;
   renderPending();renderCal();renderChart();renderAddForm();renderSettings();renderHeader();
+  if(Math.abs(window.scrollY-sy)>1) window.scrollTo(0,sy);
 }
 
 /* ===== 起動 ===== */

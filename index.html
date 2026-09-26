@@ -38,6 +38,8 @@ header{
 }
 .hrow{display:flex;align-items:center;justify-content:space-between;gap:10px;}
 .htitle{font-size:14px;font-weight:700;letter-spacing:.16em;}
+.hleft{display:flex;align-items:center;gap:10px;}
+.hlink{font-size:11px;color:rgba(246,242,233,.7);text-decoration:none;border:1px solid rgba(246,242,233,.3);border-radius:99px;padding:1px 8px;}
 .hsync{display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(246,242,233,.62);}
 .dot{width:7px;height:7px;border-radius:50%;background:var(--ok);flex:none;}
 .dot.off{background:var(--dim);}
@@ -276,7 +278,11 @@ nav button[aria-current="true"] svg{stroke-width:2;}
 
 <header>
   <div class="hrow">
-    <span class="htitle">家計簿</span>
+    <span class="hleft">
+      <span class="htitle">家計簿</span>
+      <!-- 資産管理アプリへのリンク。URLは設定画面で登録し端末内（localStorage）に保存。未登録なら出さない -->
+      <a id="assetLink" class="hlink" href="#" target="_blank" rel="noopener" hidden>資産 ↗</a>
+    </span>
     <span class="hsync"><span class="dot off" id="dot"></span><span id="syncTxt">未接続</span></span>
   </div>
   <div class="hsum">
@@ -339,6 +345,9 @@ nav button[aria-current="true"] svg{stroke-width:2;}
     <button class="btn" id="sSave">保存して接続する</button>
     <button class="btn sub" id="sSync" style="margin-top:9px">今すぐ同期する</button>
     <p class="note" id="sInfo"></p>
+    <p class="lbl" style="margin-top:26px">資産管理アプリへのリンク</p>
+    <div class="f"><span>資産管理アプリのURL（登録するとヘッダーに小さくリンクが出ます）</span><input type="text" id="sAssetUrl" placeholder="https://script.google.com/macros/s/.../exec"></div>
+    <button class="btn sub" id="sAssetSave">保存する（空欄で保存すると消えます）</button>
     <p class="lbl" style="margin-top:26px">表示</p>
     <div class="f"><span>読み込む期間</span><div class="chips" id="sRange"></div></div>
     <p class="lbl" style="margin-top:26px">カテゴリ</p>
@@ -814,8 +823,11 @@ function renderChart(){
   }else if(view.ctype==='pie'){
     var cx=50,cy=50,RO=40,ri=15,seg='',lab='';
     var acc=0,anySel=!!view.cat;
+    /* 返品でカテゴリ合計が0以下になることがある。扇はプラスのカテゴリだけで描く */
+    var posTotal=arr.reduce(function(a,p){return a+(p[1]>0?p[1]:0);},0);
     arr.forEach(function(p,i){
-      var frac=total?p[1]/total:0;
+      if(p[1]<=0) return;
+      var frac=posTotal?p[1]/posTotal:0;
       var on=(p[0]===view.cat);
       var ro=on?RO+5:RO;
       var op=(anySel&&!on)?0.22:1;
@@ -1029,8 +1041,14 @@ $('mDel').addEventListener('click',function(){
 });
 
 /* ===== 設定 ===== */
+function renderAssetLink(){
+  var a=$('assetLink');
+  a.hidden=!CFG.assetUrl;
+  a.href=CFG.assetUrl||'#';
+}
 function renderSettings(){
   $('sUrl').value=CFG.url||'';$('sToken').value=CFG.token||'';
+  if(document.activeElement!==$('sAssetUrl')) $('sAssetUrl').value=CFG.assetUrl||'';
   var h='';RANGES.forEach(function(r){
     h+='<button class="chip" data-v="'+r[0]+'" aria-pressed="'+(r[0]===(CFG.days===0?0:(CFG.days||90)))+'">'+r[1]+'</button>';
   });
@@ -1053,6 +1071,12 @@ $('sSave').addEventListener('click',function(){
   sync();
 });
 $('sSync').addEventListener('click',function(){sync();});
+$('sAssetSave').addEventListener('click',function(){
+  var u=$('sAssetUrl').value.trim();
+  if(u&&!/^https:\/\/[^\s"'<>]+$/.test(u)){toast('URLは https:// で始まる形式にしてください');return;}
+  CFG.assetUrl=u;ls(K_CFG,CFG);renderAssetLink();
+  toast(u?'資産管理アプリのURLを保存しました':'資産管理アプリのURLを消しました');
+});
 $('sClear').addEventListener('click',function(){
   ask('キャッシュを消しますか？','端末に保存した明細だけを消します。スプレッドシートのデータは残り、次の同期で取り直します。',
     function(){
@@ -1116,7 +1140,7 @@ $('saveCats').addEventListener('click',function(){
 /* ===== まとめて描画 ===== */
 function renderAll(){
   var sy=MAIN().scrollTop;
-  renderPending();renderCal();renderChart();renderAddForm();renderSettings();renderCatEdit();renderHeader();
+  renderPending();renderCal();renderChart();renderAddForm();renderSettings();renderCatEdit();renderHeader();renderAssetLink();
   if(Math.abs(MAIN().scrollTop-sy)>1) MAIN().scrollTop=sy;
 }
 

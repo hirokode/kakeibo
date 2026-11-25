@@ -36,6 +36,12 @@
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 html{height:100%;background:var(--bg);}
+/* iOS 26 のホーム画面アプリ（WebKit bug 301108）: ページが画面より低いと、画面の高さが
+   ステータスバーの分だけ短くなり、下に空白ができる。ページを画面いっぱいの高さにして、
+   iOS 側に画面の高さを広げさせる（JS で高さを足しても、短い位置で切られて効かない） */
+@media (display-mode: standalone){
+  html{min-height:min(100lvh,calc(100% + env(safe-area-inset-top,0px)));}
+}
 html,body{margin:0;padding:0;overscroll-behavior:none;}
 body{
   position:fixed;top:0;left:0;right:0;bottom:0;overflow:hidden;
@@ -1583,28 +1589,11 @@ function renderAll(){
 
 /* ===== 起動 ===== */
 /* iOSで画面高さが実際より短く計算されることがあるので実測して合わせる */
-/* iOS 26 のホーム画面アプリでは、画面の上（ステータスバーの下）まで描いているのに
-   innerHeight がステータスバーの分だけ短く返り、全体が上に寄って下に空白ができる。
-   上の安全領域が取れている（＝ステータスバーの裏まで描いている）ときは、画面全体の高さを使う */
-var probeTop=document.createElement('div'),probeVh=document.createElement('div');
-probeTop.style.cssText='position:fixed;top:0;left:0;width:0;height:0;padding-top:env(safe-area-inset-top);visibility:hidden;pointer-events:none';
-probeVh.style.cssText='position:fixed;top:0;left:0;width:0;height:100vh;visibility:hidden;pointer-events:none';
-document.documentElement.appendChild(probeTop);document.documentElement.appendChild(probeVh);
-function isStandalone(){
-  return window.navigator.standalone===true||!!(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches);
-}
 function fitHeight(){
   var h=window.innerHeight||0;
   var c=document.documentElement.clientHeight||0;
   var v=(window.visualViewport&&window.visualViewport.height)||0;
   h=Math.max(h,c,v);
-  if(isStandalone()&&probeTop.offsetHeight>0&&!isTyping()){
-    var portrait=window.innerHeight>=window.innerWidth;
-    var screenH=window.screen?(portrait?Math.max(screen.height,screen.width):Math.min(screen.height,screen.width)):0;
-    var full=Math.max(probeVh.offsetHeight||0,screenH);
-    /* 足りないのがステータスバー程度（〜120px）のときだけ補う */
-    if(full>h&&full-h<=120) h=full;
-  }
   if(h>0) document.documentElement.style.setProperty('--appH',h+'px');
 }
 fitHeight();

@@ -60,7 +60,7 @@ header{
 .hleft{display:flex;align-items:center;gap:10px;min-width:0;}
 .hright{display:flex;align-items:center;gap:6px;}
 .hlink{font-size:12px;font-weight:600;color:var(--text-2);text-decoration:none;border:1px solid var(--rule-2);border-radius:99px;padding:1px 9px;}
-.hsync{display:flex;align-items:center;flex:none;padding:0 2px;}
+.hsync{display:flex;align-items:center;justify-content:center;flex:none;width:28px;height:40px;padding:0;border:0;background:transparent;cursor:pointer;}
 .hgear{width:40px;height:40px;flex:none;border:0;border-radius:50%;background:transparent;color:var(--text-2);
   display:inline-flex;align-items:center;justify-content:center;cursor:pointer;}
 .hgear svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
@@ -297,10 +297,14 @@ nav button[aria-current="true"] svg{stroke-width:2;color:var(--accent);}
   overflow-y:auto;-webkit-overflow-scrolling:touch;
   background:var(--surface);border:1px solid var(--rule);border-radius:18px;padding:16px;box-shadow:var(--shadow);}
 .lbox{max-height:38vh;overflow-y:auto;-webkit-overflow-scrolling:touch;margin:0 -3px;padding:0 3px;}
-.sheet h3{margin:0 0 4px;font-size:16px;font-weight:800;}
+.sheet h3{margin:0;font-size:17px;font-weight:800;}
+.shead{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:0 2px 12px;}
+.shead b{font-size:17px;font-weight:800;white-space:nowrap;}
 .sheet .sub{font-size:12.5px;color:var(--text-3);margin-bottom:14px;font-weight:600;}
 .sheet .item{background:var(--surface-2);}
-.sheet .sub,#mRawWrap{display:none;}
+#lSub,#mSub,#mRawWrap{display:none;}
+.brow{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:9px;}
+.brow .btn{height:46px;min-height:46px;margin:0;}
 
 .toast{position:fixed;left:50%;bottom:calc(var(--nav) + var(--navgap) + 14px);transform:translateX(-50%) translateY(14px);
   background:var(--text);color:var(--bg);padding:11px 20px;border-radius:99px;font-size:13.5px;font-weight:700;
@@ -323,7 +327,7 @@ nav button[aria-current="true"] svg{stroke-width:2;color:var(--accent);}
       <a id="assetLink" class="hlink" href="#" target="_blank" rel="noopener" hidden>資産 ↗</a>
     </div>
     <div class="v num" id="sumBox"><span id="sumVal">0</span><small>円</small></div>
-    <span class="hsync" title="同期の状態"><span class="dot off" id="dot"></span><span id="syncTxt" class="sr">未接続</span></span>
+    <button class="hsync" id="syncBtn" aria-label="今すぐ同期"><span class="dot off" id="dot"></span><span id="syncTxt" class="sr">未接続</span></button>
     <button class="hgear" id="gearBtn" aria-label="設定" aria-current="false">
       <svg viewBox="0 0 24 24"><path d="M4.5 7.5h15M4.5 16.5h15"/><circle cx="9.6" cy="7.5" r="2.5" fill="var(--bg)"/><circle cx="15" cy="16.5" r="2.5" fill="var(--bg)"/></svg>
     </button>
@@ -427,10 +431,10 @@ nav button[aria-current="true"] svg{stroke-width:2;color:var(--accent);}
 <!-- 明細一覧ポップアップ -->
 <div class="modal" id="listModal">
   <div class="sheet">
-    <h3 id="lTitle">明細</h3>
-    <div class="sub" id="lSub"></div>
+    <div class="shead"><h3 id="lTitle">明細</h3><b class="num" id="lTotal"></b></div>
+    <div class="sub" id="lSub" hidden></div>
     <div id="lList" class="lbox"></div>
-    <button class="btn" id="lAdd" style="margin-top:12px">＋ この日に新規作成</button>
+    <button class="btn" id="lAdd" style="margin-top:12px">この日に追加</button>
     <button class="btn sub" id="lClose" style="margin-top:9px">閉じる</button>
   </div>
 </div>
@@ -438,19 +442,21 @@ nav button[aria-current="true"] svg{stroke-width:2;color:var(--accent);}
 <!-- 編集モーダル -->
 <div class="modal" id="modal">
   <div class="sheet">
-    <h3 id="mShop">明細</h3>
-    <div class="sub" id="mSub"></div>
-    <div class="f"><span>表示名</span><input type="text" id="mUse" placeholder="飲み物＋お菓子 など"></div>
-    <div class="f"><span>金額</span><input type="number" id="mAmt" inputmode="numeric"></div>
-    <div id="mRawWrap" class="note" style="margin:-8px 0 13px"></div>
+    <div class="shead"><h3 id="mShop">明細</h3></div>
+    <div class="sub" id="mSub" hidden></div>
+    <div class="f"><input type="text" id="mUse" placeholder="名前を付ける" aria-label="名前"></div>
+    <div class="f"><input type="number" id="mAmt" class="big" inputmode="numeric" aria-label="金額"></div>
+    <div id="mRawWrap" class="note" hidden></div>
     <div style="display:flex;gap:8px">
-      <div class="f" style="flex:1"><span>日付</span><input type="date" id="mDate"></div>
-      <div class="f" style="width:110px;flex:none"><span>時刻</span><input type="time" id="mTime"></div>
+      <div class="f" style="flex:1;min-width:0"><input type="date" id="mDate" aria-label="日付"></div>
+      <div class="f" style="width:118px;flex:none"><input type="time" id="mTime" aria-label="時刻"></div>
     </div>
-    <div class="f"><span>カテゴリ</span><div class="chips" id="mCat"></div></div>
-    <button class="btn" id="mSave">保存する</button>
-    <button class="btn sub" id="mCancel" style="margin-top:9px">キャンセル</button>
-    <button class="btn danger" id="mDel" style="margin-top:9px">この明細を削除</button>
+    <div class="f"><div class="chips" id="mCat" aria-label="カテゴリ"></div></div>
+    <button class="btn" id="mSave">保存</button>
+    <div class="brow">
+      <button class="btn sub" id="mCancel">閉じる</button>
+      <button class="btn danger" id="mDel">削除</button>
+    </div>
   </div>
 </div>
 
@@ -783,6 +789,8 @@ details.card[open] > summary { margin-bottom: 10px; }
 input, select { border-radius: 14px; }
 .pbar select { border-radius: 999px; padding-left: 18px; }
 .ba-row.over .ba-val { color: var(--danger); }
+.item [data-f="memo"] { min-height: 38px; border-color: transparent; background: transparent; padding-left: 6px; font-size: 16px; }
+.item [data-f="memo"]:focus { border-color: var(--accent); background: var(--surface); }
 .tab .n { color: inherit !important; opacity: .85; }
 
 /* 予算と実績（家計簿の明細から集計） */
@@ -971,6 +979,7 @@ document.querySelector('nav').addEventListener('click',function(e){
   show(b.dataset.p);
 });
 $('gearBtn').addEventListener('click',function(){show('set');});
+$('syncBtn').addEventListener('click',function(){if(CFG.url&&CFG.token) sync(false);});
 
 /* ===== 集計 ===== */
 function monthItems(key){
@@ -1221,8 +1230,7 @@ $('cal').addEventListener('click',function(e){
 $('mPrev').addEventListener('click',function(){view.month=monShift(view.month,-1);view.day=null;renderCal();renderHeader();});
 $('mNext').addEventListener('click',function(){view.month=monShift(view.month,1);view.day=null;renderCal();renderHeader();});
 
-/* 円グラフの色（彩度を抑えた並び。PIE_DARK は今は使っていない） */
-var PIE_DARK=['#7fb89e','#d4a373','#8ba6c7','#c98a9a','#b9b46e','#79aab8','#d98b6c','#a99bc9','#93b47c','#c7a27c','#84928b'];
+/* 円グラフの色（彩度を抑えた並び） */
 var PIE_LIGHT=['#2e6b53','#a8692a','#3f6590','#9c4f62','#7d7a2c','#2f7487','#b0553a','#6a5c99','#5a7d3f','#8c6a3f','#6c7973'];
 var PIE=PIE_LIGHT; /* 画面はいつも白ベース */
 
@@ -1386,12 +1394,13 @@ function renderList(){
     $('lAdd').classList.remove('hide');
   }else{
     list=monthItems(view.gmonth).filter(function(x){return x.category===lctx.key;});
-    title=lctx.key+'（'+monLabel(view.gmonth)+'）';
+    title=(+view.gmonth.slice(5,7))+'月の'+lctx.key;
     $('lAdd').classList.add('hide');
   }
   sub=list.length?(list.length+'件　合計 '+yen(sum(list))+'円'):'明細はありません';
   $('lTitle').textContent=title;
   $('lSub').textContent=sub;
+  $('lTotal').textContent=list.length?yen(sum(list))+'円':'';
   $('lList').innerHTML=list.length
     ? list.map(function(it){return itemHtml(it,false);}).join('')
     : '<div class="empty">記録がありません</div>';
@@ -2787,7 +2796,7 @@ function renderSettings() {
     <div class="card settings-actions">
       <button type="button" class="btn block" data-act="export">JSON ファイルに書き出す</button>
       <button type="button" class="btn block" data-act="import">JSON ファイルから読み込む</button>
-      ${legacy ? '<button type="button" class="btn block" data-act="legacy">お金計画アプリのデータを取り込む</button>' : ''}
+      ${legacy && !hasContent(state.data) ? '<button type="button" class="btn block" data-act="legacy">お金計画アプリのデータを取り込む</button>' : ''}
       <p class="help">読み込む・取り込むと、今の計画は上書きされ、スプレッドシートにも送られます。</p>
     </div>
 

@@ -3,7 +3,7 @@
  *
  * 使い方（くわしくは gas/README.md）
  *   1. このファイルを、家計簿の Apps Script プロジェクトに「plan.gs」として追加する
- *   2. kakeibo.gs の doGet / doPost の先頭に 1 行ずつ足す
+ *   2. api.gs の doGet / doPost の先頭に 1 行ずつ足す
  *        function doGet(e)  { var r = planRouteGet_(e);  if (r) return r;  …既存の処理… }
  *        function doPost(e) { var r = planRoutePost_(e); if (r) return r;  …既存の処理… }
  *   3. デプロイ → デプロイを管理 → 編集 → バージョン「新バージョン」で更新（URL は変わらない）
@@ -51,7 +51,7 @@ function planRespond_(token, fn) {
   return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
 }
 
-/** 合言葉は家計簿と同じもの（kakeibo.gs の apiToken_）を使う。名前が違う場合はここを直す */
+/** 合言葉は家計簿と同じもの（api.gs の apiToken_）を使う。名前が違う場合はここを直す */
 function planTokenOk_(token) {
   var expected = '';
   try { if (typeof apiToken_ === 'function') expected = String(apiToken_()); } catch (e1) { /* 次を試す */ }

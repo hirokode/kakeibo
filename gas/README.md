@@ -7,7 +7,7 @@ GAS を更新するまでは、計画はスマホの中にだけ保存され、�
 
 1. スプレッドシート「家計簿_Claude」を開き、拡張機能 › Apps Script を開く
 2. 左の「ファイル」の ＋ › スクリプト で `plan` を作り、[`plan.gs`](plan.gs) の中身をそのまま貼り付けて保存する
-3. `kakeibo.gs` の `doGet` と `doPost` の **先頭** に 1 行ずつ足して保存する
+3. `api.gs` の `doGet` と `doPost` の **先頭** に 1 行ずつ足して保存する
 
    ```js
    function doGet(e) {
@@ -27,7 +27,7 @@ GAS を更新するまでは、計画はスマホの中にだけ保存され、�
 
 ## 合言葉について
 
-`plan.gs` は家計簿と同じ合言葉（`kakeibo.gs` の `apiToken_`）で確認します。
+`plan.gs` は家計簿と同じ合言葉（`api.gs` の `apiToken_()` が読むスクリプトプロパティ `API_TOKEN`）で確認します。
 合言葉を別の名前で書いている場合は、`plan.gs` の `planTokenOk_` の中を書き換えてください。
 
 ## シートの形

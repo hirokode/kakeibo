@@ -125,7 +125,7 @@ main > .pane > *{max-width:100%;}
 .chipwrap{position:relative;}
 
 /* 確認ダイアログ */
-.confirm{position:fixed;inset:0;background:var(--scrim);z-index:70;
+.confirm{position:fixed;top:0;left:0;right:0;height:var(--appH,100dvh);background:var(--scrim);z-index:70;
   display:none;align-items:center;justify-content:center;padding:20px;}
 .confirm.on{display:flex;}
 .cbox{background:var(--surface);border:1px solid var(--rule);border-radius:16px;padding:20px 18px 16px;max-width:340px;width:100%;
@@ -259,7 +259,7 @@ input::placeholder{color:var(--text-3);font-weight:600;opacity:.8;}
 
 /* 下部ナビ */
 nav{
-  position:fixed;left:12px;right:12px;bottom:var(--navgap);
+  position:absolute;left:12px;right:12px;bottom:var(--navgap);
   max-width:516px;margin:0 auto;z-index:40;
   background:var(--nav-bg);
   -webkit-backdrop-filter:saturate(150%) blur(18px);backdrop-filter:saturate(150%) blur(18px);
@@ -306,7 +306,7 @@ nav button[aria-current="true"] svg{stroke-width:2;color:var(--accent);}
 .brow{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:9px;}
 .brow .btn{height:46px;min-height:46px;margin:0;}
 
-.toast{position:fixed;left:50%;bottom:calc(var(--nav) + var(--navgap) + 14px);transform:translateX(-50%) translateY(14px);
+.toast{position:absolute;left:50%;bottom:calc(var(--nav) + var(--navgap) + 14px);transform:translateX(-50%) translateY(14px);
   background:var(--text);color:var(--bg);padding:11px 20px;border-radius:99px;font-size:13.5px;font-weight:700;
   opacity:0;pointer-events:none;transition:all .2s;z-index:80;max-width:88%;text-align:center;}
 .toast.on{opacity:1;transform:translateX(-50%) translateY(0);}
@@ -1583,11 +1583,28 @@ function renderAll(){
 
 /* ===== 起動 ===== */
 /* iOSで画面高さが実際より短く計算されることがあるので実測して合わせる */
+/* iOS 26 のホーム画面アプリでは、画面の上（ステータスバーの下）まで描いているのに
+   innerHeight がステータスバーの分だけ短く返り、全体が上に寄って下に空白ができる。
+   上の安全領域が取れている（＝ステータスバーの裏まで描いている）ときは、画面全体の高さを使う */
+var probeTop=document.createElement('div'),probeVh=document.createElement('div');
+probeTop.style.cssText='position:fixed;top:0;left:0;width:0;height:0;padding-top:env(safe-area-inset-top);visibility:hidden;pointer-events:none';
+probeVh.style.cssText='position:fixed;top:0;left:0;width:0;height:100vh;visibility:hidden;pointer-events:none';
+document.documentElement.appendChild(probeTop);document.documentElement.appendChild(probeVh);
+function isStandalone(){
+  return window.navigator.standalone===true||!!(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches);
+}
 function fitHeight(){
   var h=window.innerHeight||0;
   var c=document.documentElement.clientHeight||0;
   var v=(window.visualViewport&&window.visualViewport.height)||0;
   h=Math.max(h,c,v);
+  if(isStandalone()&&probeTop.offsetHeight>0&&!isTyping()){
+    var portrait=window.innerHeight>=window.innerWidth;
+    var screenH=window.screen?(portrait?Math.max(screen.height,screen.width):Math.min(screen.height,screen.width)):0;
+    var full=Math.max(probeVh.offsetHeight||0,screenH);
+    /* 足りないのがステータスバー程度（〜120px）のときだけ補う */
+    if(full>h&&full-h<=120) h=full;
+  }
   if(h>0) document.documentElement.style.setProperty('--appH',h+'px');
 }
 fitHeight();

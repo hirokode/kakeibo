@@ -789,7 +789,13 @@ details.card[open] > summary { margin-bottom: 10px; }
 input, select { border-radius: 14px; }
 .pbar select { border-radius: 999px; padding-left: 18px; }
 .ba-row.over .ba-val { color: var(--danger); }
-.item [data-f="memo"] { min-height: 38px; border-color: transparent; background: transparent; padding-left: 6px; font-size: 16px; }
+.item [data-f="memo"] { min-height: 38px; border-color: transparent; background: transparent; padding: 8px 6px; font-size: 16px; line-height: 1.5; }
+.item textarea[data-f="memo"] { display: block; resize: none; overflow: hidden; font: inherit; font-size: 16px; color: var(--text); border: 1px solid transparent; border-radius: 12px; }
+/* メモを書いたら、その行の下に全幅で出す（空のときは同じ行に小さく） */
+.row:has(> textarea[data-f="memo"]) { flex-wrap: wrap; }
+.item textarea[data-f="memo"]:placeholder-shown { flex: 1 1 0; width: 0; }
+.item textarea[data-f="memo"]:not(:placeholder-shown) { flex: 1 1 100%; width: 100%; order: 3; }
+.row:has(> textarea[data-f="memo"]:not(:placeholder-shown)) > .icon-btn { margin-left: auto; }
 .item [data-f="memo"]:focus { border-color: var(--accent); background: var(--surface); }
 .tab .n { color: inherit !important; opacity: .85; }
 
@@ -2475,7 +2481,7 @@ function derivedHTML(item, c) {
 function itemHTML(kind, item, c) {
   const sw = `<label class="sw" title="集計に含める"><input type="checkbox" data-f="enabled" ${item.enabled ? 'checked' : ''} aria-label="有効（集計に含める）"><span></span></label>`;
   const amt = `<div class="amt-wrap fade"><input data-f="amount" inputmode="numeric" autocomplete="off" enterkeyhint="done" value="${fmtInputAmount(item.amount)}" placeholder="0" aria-label="金額"></div>`;
-  const memo = `<input class="grow fade" data-f="memo" value="${esc(item.memo)}" placeholder="メモ" aria-label="メモ" autocomplete="off">`;
+  const memo = `<textarea class="grow fade" data-f="memo" rows="1" placeholder="メモ" aria-label="メモ" autocomplete="off">${esc(item.memo)}</textarea>`;
   const del = `<button type="button" class="icon-btn" data-act="del" aria-label="この項目を削除" title="削除">×</button>`;
   let body = '';
   if (kind === 'income') {
@@ -2499,7 +2505,15 @@ function itemHTML(kind, item, c) {
   return `<div class="item ${item.enabled ? '' : 'is-off'}" data-id="${esc(item.id)}">${body}</div>`;
 }
 
+/** メモ欄は書いた分だけ高さを伸ばす（空なら 1 行） */
+function sizeMemo(el) {
+  el.style.height = 'auto';
+  if (el.scrollHeight) el.style.height = el.scrollHeight + 'px';
+}
+function sizeMemos() { $$('#input-pane textarea[data-f="memo"]').forEach(sizeMemo); }
+
 function renderInputTabs(c) {
+  requestAnimationFrame(sizeMemos);
   const totals = { income: c.income, fixed: c.fixed, savings: c.savings, variable: c.variable };
   $('#input-tabs').innerHTML = PLAN_KINDS.map((k) => `
     <button type="button" class="tab" role="tab" data-tab="${k}" aria-selected="${state.tab === k}">
@@ -2616,6 +2630,7 @@ function setupInputEvents() {
   const pane = $('#input-pane');
 
   pane.addEventListener('input', (e) => {
+    if (e.target.tagName === 'TEXTAREA') sizeMemo(e.target);
     if (e.target.dataset.planF === 'variableTotal') {
       plan().variableTotal = toAmount(e.target.value);
       plan().updatedAt = nowISO();

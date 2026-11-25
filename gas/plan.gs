@@ -9,8 +9,8 @@
  *   3. デプロイ → デプロイを管理 → 編集 → バージョン「新バージョン」で更新（URL は変わらない）
  *
  * 保存先のシート（なければ自動で作る。人が読んでも分かる形にしてある）
- *   計画       … 1 行 = 1 項目（月・区分・有効・項目・種別・金額・支払日・メモ・ID・更新日時）
- *   計画_月    … 1 行 = 1 か月（変動費の入れ方・全体予算・作成/更新日時・手取りの実績・上振れの貯金割合）
+ *   計画       … 1 行 = 1 項目（月・区分・有効・項目・種別・金額・支払日・メモ・ID・更新日時）。生活費の金額はマイナス（差し引く項目）も入る
+ *   計画_月    … 1 行 = 1 か月（変動費の入れ方・全体予算・作成/更新日時・手取りの実績・上振れの貯金割合・生活費を引くか）
  *   計画_設定  … カテゴリなど（キーと値）
  *
  * アプリとのやり取り
@@ -19,10 +19,10 @@
  */
 
 var PLAN_SHEETS = { items: '計画', months: '計画_月', meta: '計画_設定' };
-var PLAN_KINDS = ['income', 'fixed', 'savings', 'variable'];
-var PLAN_KIND_LABEL = { income: '収入', fixed: '固定費', savings: '貯金', variable: '変動費' };
+var PLAN_KINDS = ['income', 'living', 'fixed', 'savings', 'variable'];
+var PLAN_KIND_LABEL = { income: '収入', living: '生活費', fixed: '固定費', savings: '貯金', variable: '変動費' };
 var PLAN_ITEM_HEAD = ['月', '区分', '有効', '項目', '種別', '金額', '支払日', 'メモ', 'ID', '更新日時'];
-var PLAN_MONTH_HEAD = ['月', '変動費の入れ方', '変動費（全体）', '作成日時', '更新日時', '手取り（実績）', '上振れの貯金割合（%）'];
+var PLAN_MONTH_HEAD = ['月', '変動費の入れ方', '変動費（全体）', '作成日時', '更新日時', '手取り（実績）', '上振れの貯金割合（%）', '生活費'];
 var PLAN_META_HEAD = ['キー', '値'];
 
 /** doGet の先頭で呼ぶ。計画以外のリクエストなら null を返す */
@@ -99,6 +99,11 @@ function planAmount_(v) {
   var n = Number(String(v == null ? '' : v).replace(/[^0-9.\-]/g, ''));
   return isFinite(n) && n > 0 ? Math.round(n) : 0;
 }
+/** 生活費の金額（マイナス可） */
+function planSigned_(v) {
+  var n = Number(String(v == null ? '' : v).replace(/−/g, '-').replace(/[^0-9.\-]/g, ''));
+  return isFinite(n) ? Math.round(n) : 0;
+}
 
 function planGet_() {
   var meta = {};
@@ -126,11 +131,12 @@ function planGet_() {
       variableMode: r[1] === '全体' ? 'total' : 'items',
       variableTotal: planAmount_(r[2]),
       createdAt: planStr_(r[3]), updatedAt: planStr_(r[4]),
-      income: [], fixed: [], savings: [], variable: []
+      income: [], living: [], fixed: [], savings: [], variable: []
     };
     // 手取りの実績と割合は、空欄なら送らない（アプリ側で端末の値か既定の 70% を使う）
     if (r[5] !== '' && r[5] != null) data.plans[m].actualIncome = planAmount_(r[5]);
     if (r[6] !== '' && r[6] != null && isFinite(Number(r[6]))) data.plans[m].surplusSaveRate = Number(r[6]);
+    data.plans[m].livingEnabled = String(r[7]) !== 'オフ';
   });
   var kindOf = {};
   PLAN_KINDS.forEach(function (k) { kindOf[PLAN_KIND_LABEL[k]] = k; });
@@ -142,12 +148,13 @@ function planGet_() {
     var it = {
       id: planStr_(r[8]),
       enabled: !(r[2] === false || String(r[2]).toUpperCase() === 'FALSE' || r[2] === '×'),
-      amount: planAmount_(r[5]),
+      amount: kind === 'living' ? planSigned_(r[5]) : planAmount_(r[5]),
       memo: planStr_(r[7]),
       updatedAt: planStr_(r[9])
     };
     if (kind === 'income' || kind === 'variable') it.category = planStr_(r[3]);
     if (kind === 'fixed') { it.name = planStr_(r[3]); it.payDay = planStr_(r[6]); }
+    if (kind === 'living') it.name = planStr_(r[3]);
     if (kind === 'savings') { it.name = planStr_(r[3]); it.type = planStr_(r[4]); }
     p[kind].push(it);
   });
@@ -166,12 +173,13 @@ function planSet_(data) {
       // 月は先頭に ' を付けて文字列のまま保存する（日付に変換されないように）
       var rate = Number(p.surplusSaveRate);
       monthRows.push([planText_(m), p.variableMode === 'total' ? '全体' : '項目別', planAmount_(p.variableTotal), planText_(p.createdAt), planText_(p.updatedAt),
-        planAmount_(p.actualIncome) || '', isFinite(rate) && p.surplusSaveRate !== '' && p.surplusSaveRate != null ? rate : '']);
+        planAmount_(p.actualIncome) || '', isFinite(rate) && p.surplusSaveRate !== '' && p.surplusSaveRate != null ? rate : '',
+        p.livingEnabled === false ? 'オフ' : 'オン']);
       PLAN_KINDS.forEach(function (k) {
         (p[k] || []).forEach(function (it) {
-          var label = (k === 'fixed' || k === 'savings') ? (it.name || '') : (it.category || '');
+          var label = (k === 'fixed' || k === 'savings' || k === 'living') ? (it.name || '') : (it.category || '');
           itemRows.push([planText_(m), PLAN_KIND_LABEL[k], it.enabled !== false, planText_(label), k === 'savings' ? planText_(it.type) : '',
-            planAmount_(it.amount), k === 'fixed' ? planText_(it.payDay) : '', planText_(it.memo), planText_(it.id), planText_(it.updatedAt)]);
+            k === 'living' ? planSigned_(it.amount) : planAmount_(it.amount), k === 'fixed' ? planText_(it.payDay) : '', planText_(it.memo), planText_(it.id), planText_(it.updatedAt)]);
         });
       });
     });

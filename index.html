@@ -626,7 +626,30 @@ h1, h2, h3 { margin: 0; line-height: 1.3; }
 .edit-ico { flex: none; width: 50px; display: flex; justify-content: center; color: var(--tone); }
 .srow.auto { cursor: default; }
 .srow.auto .st { color: var(--text-2); }
-.xsw-in { align-self: center; margin-left: 2px; }
+.xsw-in { align-self: center; margin-left: 2px; margin-right: 14px; }
+.bucket .xtoggle { min-height: 66px; padding-right: 14px; }
+.bucket .xtoggle .t { font-size: 18px; font-weight: 800; }
+.bucket .xtoggle .v { font-size: 20px; font-weight: 800; }
+.bucket.has-sw .xtoggle { padding-right: 6px; }
+.bucket.neg > .xhead .v { color: var(--danger); }
+.sec { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 14px 16px 8px; border-top: 1px solid var(--div); font-weight: 800; }
+.sec b { font-size: 17px; font-weight: 800; }
+.sec.neg b { color: var(--danger); }
+.er { display: flex; align-items: center; gap: 10px; min-height: 58px; padding: 6px 12px 6px 16px; border-top: 1px dashed var(--div); background: color-mix(in srgb, var(--surface) 55%, transparent); }
+.er-n { flex: 1; min-width: 0; padding: 8px 0; border: 0; border-bottom: 1px solid transparent; border-radius: 0; background: transparent; color: var(--text); font: inherit; font-size: 16px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+input.er-n:focus { outline: none; border-bottom-color: var(--tone); }
+.er .amt-wrap { flex: none; width: 140px; }
+.er.is-off .er-n, .er.is-off .amt-wrap input { color: var(--text-3); }
+.er.base .er-n { font-weight: 800; }
+.er.left { min-height: 50px; color: var(--text-2); }
+.er.left .er-n { color: var(--text-2); font-weight: 700; }
+.er.left b { flex: none; width: 140px; padding-right: 16px; text-align: right; font-size: 16px; }
+.er.left.neg b { color: var(--danger); }
+.er[hidden] { display: none; }
+.er-add { position: relative; display: flex; width: 100%; align-items: center; justify-content: center; min-height: 48px; border: 0; border-top: 1px dashed var(--div); background: transparent; color: var(--tone); font: inherit; font-size: 22px; font-weight: 700; cursor: pointer; }
+.er-add select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; font-size: 16px; }
+.er-add:active { background: color-mix(in srgb, var(--tone) 10%, transparent); }
+@media (max-width: 370px) { .er .amt-wrap, .er.left b { width: 124px; } }
 @media (max-width: 370px) { .xrow.has-sw .caret { display: none; } }
 .item.living-sw { margin-bottom: 10px; }
 .xrow.is-off .xtoggle .v { color: var(--text-3); text-decoration: line-through; }
@@ -2415,48 +2438,6 @@ function autoAmount(kind, c) {
 const autoTitle = () => '未配分';
 
 /** タップで小項目が開く行（右の鉛筆はその入力タブへ、小項目はその項目の編集位置へ） */
-function expandRowHTML({ kind, title, sub, value, total, minus, p, c, sw, off, neg }) {
-  const open = state.homeOpen.has(kind);
-  const color = GROUP_COLORS[kind];
-  const subs = kind === 'variable' && c.variableIsTotal
-    ? [{ id: 'total', title: '全体で入力', sub: `1日 ${yen(c.variableDaily)} · 週 ${yen(c.variableWeekly)}`, amount: toAmount(p.variableTotal), enabled: true }]
-    : homeSubItems(kind, p, c);
-  const auto = autoAmount(kind, c);
-  if (auto) subs.push({ auto: true, title: autoTitle(auto), amount: auto, enabled: true });
-  // 出ていくお金は「−」、差し引く項目や下振れは「＋」で見せる
-  const show = (v, isAuto) => (isAuto ? yen(v)
-    : minus ? (v > 0 ? '−' + yen(v) : v < 0 ? '+' + yen(-v) : yen(0))
-    : yen(v));
-  const subHTML = subs.length ? subs.map((x) => {
-    const w = total > 0 && x.enabled && x.amount > 0 ? Math.max(1.5, (x.amount / total) * 100) : 0;
-    const inner = `
-        <span class="sl">
-          <span class="st">${esc(x.title)}${x.enabled ? '' : '<span class="off-tag">オフ</span>'}</span>
-          ${x.sub ? `<span class="ss">${esc(x.sub)}</span>` : ''}
-          <span class="sbar" aria-hidden="true"><i style="width:${w}%;background:${color}"></i></span>
-        </span>
-        <span class="sv num">${show(x.amount, x.auto)}</span>`;
-    if (x.auto) return `<div class="srow auto ${x.amount < 0 ? 'neg' : ''}">${inner}<span class="edit-ico" aria-hidden="true"></span></div>`;
-    return `<a class="srow ${x.enabled ? '' : 'is-off'}" href="#plan/input/${kind}/${esc(x.id)}" aria-label="${esc(x.title)} を編集">${inner}
-        <span class="edit-ico" aria-hidden="true">${ICON_EDIT}</span>
-      </a>`;
-  }).join('')
-    : `<a class="srow" href="#plan/input/${kind}"><span class="sl"><span class="st muted">まだ項目がありません</span></span><span class="add-link">追加する</span></a>`;
-  return `
-    <div class="xrow ${open ? 'open' : ''} ${off ? 'is-off' : ''} ${sw ? 'has-sw' : ''} ${neg ? 'neg' : ''}" data-kind="${kind}">
-      <div class="xhead">
-        <button type="button" class="xtoggle" data-toggle="${kind}" aria-expanded="${open}" aria-controls="subs-${kind}">
-          <span class="swatch" style="background:${color}"></span>
-          <span class="l"><span class="t">${title}</span>${sub ? `<span class="s">${esc(sub)}</span>` : ''}</span>
-          <span class="v num">${value}</span>
-          ${ICON_CARET}
-        </button>
-        ${sw || ''}
-        <a class="edit-btn" href="#plan/input/${kind}" aria-label="${title}を編集">${ICON_EDIT}</a>
-      </div>
-      <div class="xbody" id="subs-${kind}" ${open ? '' : 'inert'}><div class="xinner">${subHTML}</div></div>
-    </div>`;
-}
 
 /** 遊びに使える変動費の予算（支出 − 固定費） */
 function variableBudget(c) {
@@ -2555,46 +2536,139 @@ function monthTrendHTML() {
     </div>`;
 }
 
+const minusYen = (v) => (v > 0 ? '−' + yen(v) : v < 0 ? '+' + yen(-v) : yen(0));
+
+/**
+ * ホーム: 手取りのカードの下に、大項目（生活費・支出・貯金）。金額はアプリが決める。
+ * 大項目を開くと中のカテゴリが出て、その場で金額を直せる。
+ */
 function renderHome() {
   const p = plan();
   const c = calcPlanWithActual(p);
-  const minus = (v) => (v > 0 ? '−' + yen(v) : v < 0 ? '+' + yen(-v) : yen(0));
-  const short = c.variable < 0;
+  const sw = `<label class="sw xsw-in" title="手取りから引く"><input type="checkbox" data-living-sw ${c.livingOn ? 'checked' : ''} aria-label="仮生活費（手取りから引く）"><span></span></label>`;
 
   $('#view-home').innerHTML = `
     ${surplusCardHTML(p, c)}
 
     <section class="grp tone-living">
       <div class="grp-card">
-        ${expandRowHTML({ kind: 'living', title: '生活費', sub: '', value: minus(c.living || (c.livingOn ? 0 : sumSigned(p.living))), total: livingGross(p), minus: true, p, c, off: !c.livingOn,
-          sw: `<label class="sw xsw-in" title="手取りから引く"><input type="checkbox" data-living-sw ${c.livingOn ? 'checked' : ''} aria-label="仮生活費（手取りから引く）"><span></span></label>` })}
+        ${bucketHTML('living', '生活費', minusYen(c.livingOn ? c.living : c.livingItems), { off: !c.livingOn, sw, body: `
+          ${(p.living || []).map((it) => editRowHTML('living', it)).join('')}
+          ${addRowHTML('living', '生活費')}` })}
       </div>
     </section>
 
     <section class="grp tone-out">
       <div class="grp-card">
-        <div class="grp-sum ${c.spend < 0 ? 'neg' : ''}"><span>支出</span><b class="num">${minus(c.spend)}</b></div>
-        ${expandRowHTML({ kind: 'fixed', title: '固定費', sub: '', value: minus(c.fixed), total: Math.max(c.spend, c.fixed), minus: true, p, c })}
-        ${expandRowHTML({ kind: 'variable', title: '変動費', sub: '', value: minus(c.variable), total: Math.max(0, c.variable), minus: true, p, c, neg: short })}
-        ${short ? `<div class="status bad" role="alert"><strong>${yen(-c.variable)} 足りません</strong></div>` : ''}
+        ${bucketHTML('spend', '支出', minusYen(c.spend), { neg: c.spend < 0, body: `
+          <div class="sec"><span>固定費</span><b class="num" data-total="fixed">${minusYen(c.fixed)}</b></div>
+          ${p.fixed.map((it) => editRowHTML('fixed', it)).join('')}
+          ${addRowHTML('fixed', '固定費')}
+          <div class="sec ${c.variable < 0 ? 'neg' : ''}" data-sec="variable"><span>変動費</span><b class="num" data-total="variable">${minusYen(c.variable)}</b></div>
+          ${sortByCategoryOrder(p.variable, cats().variable).map((it) => editRowHTML('variable', it)).join('')}
+          ${addCategoryHTML(p)}
+          ${leftRowHTML('variable', c.variableLeft)}` })}
       </div>
     </section>
 
     <section class="grp tone-save">
       <div class="grp-card">
-        ${expandRowHTML({ kind: 'savings', title: '貯金', sub: '', value: yen(c.savings), total: c.savings, p, c })}
-        <div class="grp-foot"><span>貯蓄率</span><b class="num">${pct(c.savingsRate)}</b></div>
+        ${bucketHTML('savings', '貯金', yen(c.savings), { body: `
+          <div class="er base"><span class="er-n">毎月の貯金</span>
+            <div class="amt-wrap"><input data-base inputmode="numeric" autocomplete="off" enterkeyhint="done" value="${fmtInputAmount(toAmount(p.savingsBase))}" placeholder="0" aria-label="毎月の貯金"></div></div>
+          ${p.savings.map((it) => editRowHTML('savings', it)).join('')}
+          ${addRowHTML('savings', '貯金')}
+          ${leftRowHTML('savings', c.savingsLeft)}` })}
+        <div class="grp-foot"><span>貯蓄率</span><b class="num" data-rate>${pct(c.savingsRate)}</b></div>
       </div>
     </section>
 
-    <section class="grp tone-chart">
+    <section class="grp tone-chart" id="home-charts">${homeChartsHTML(p, c)}</section>`;
+}
+
+function homeChartsHTML(p, c) {
+  return `
       <div class="card">
         <div class="chart-title">手取りの使い道</div>
         ${allocationHTML(c)}
       </div>
       ${budgetActualHTML(p, c)}
-      ${monthTrendHTML()}
-    </section>`;
+      ${monthTrendHTML()}`;
+}
+
+/** 大項目。見出し（名前・アプリが決めた金額）を押すと中が開く */
+function bucketHTML(key, title, value, { off, neg, sw, body }) {
+  const open = state.homeOpen.has(key);
+  return `
+    <div class="xrow bucket ${open ? 'open' : ''} ${off ? 'is-off' : ''} ${neg ? 'neg' : ''} ${sw ? 'has-sw' : ''}" data-kind="${key}">
+      <div class="xhead">
+        <button type="button" class="xtoggle" data-toggle="${key}" aria-expanded="${open}" aria-controls="subs-${key}">
+          <span class="l"><span class="t">${title}</span></span>
+          <span class="v num" data-total="${key}">${value}</span>
+          ${ICON_CARET}
+        </button>
+        ${sw || ''}
+      </div>
+      <div class="xbody" id="subs-${key}" ${open ? '' : 'inert'}><div class="xinner">${body}</div></div>
+    </div>`;
+}
+
+/** 中のカテゴリ 1 行: 名前と金額をその場で直せる（変動費の名前は家計簿のカテゴリなので固定） */
+function editRowHTML(kind, it) {
+  const a = itemAmount(kind, it);
+  const neg = kind === 'living' && a < 0;
+  const name = kind === 'variable' || kind === 'income'
+    ? `<span class="er-n">${esc(it.category || '未分類')}</span>`
+    : `<input class="er-n" data-f="name" value="${esc(it.name)}" placeholder="項目" aria-label="項目" autocomplete="off" enterkeyhint="done">`;
+  return `
+    <div class="er ${it.enabled ? '' : 'is-off'}" data-kind="${kind}" data-id="${esc(it.id)}">
+      ${name}
+      <div class="amt-wrap ${neg ? 'is-neg' : ''}"><input data-f="amount" inputmode="numeric" autocomplete="off" enterkeyhint="done" value="${fmtInputAmount(Math.abs(a))}" placeholder="0" aria-label="金額"></div>
+    </div>`;
+}
+
+function addRowHTML(kind, label) {
+  return `<button type="button" class="er-add" data-add="${kind}" aria-label="${label}を追加">＋</button>`;
+}
+
+/** 変動費は家計簿のカテゴリから選んで足す */
+function addCategoryHTML(p) {
+  const used = new Set(p.variable.map((it) => it.category));
+  const rest = cats().variable.filter((v) => !used.has(v));
+  if (!rest.length) return '';
+  return `<label class="er-add"><span aria-hidden="true">＋</span>
+    <select data-add-cat aria-label="変動費のカテゴリを追加"><option value="" selected>カテゴリを追加</option>${rest.map((v) => `<option value="${esc(v)}">${esc(v)}</option>`).join('')}</select></label>`;
+}
+
+function leftRowHTML(kind, v) {
+  return `<div class="er left ${v < 0 ? 'neg' : ''}" data-left="${kind}" ${v ? '' : 'hidden'}><span class="er-n">未配分</span><b class="num">${yen(v)}</b></div>`;
+}
+
+/** 入力中は描き直さず、合計の数字だけ直す */
+function refreshHomeNumbers() {
+  const root = $('#view-home');
+  const p = plan();
+  const c = calcPlanWithActual(p);
+  const set = (sel, text) => { const el = root.querySelector(sel); if (el) el.textContent = text; return el; };
+  set('[data-total="living"]', minusYen(c.livingOn ? c.living : c.livingItems));
+  set('[data-total="spend"]', minusYen(c.spend));
+  set('[data-total="fixed"]', minusYen(c.fixed));
+  set('[data-total="variable"]', minusYen(c.variable));
+  set('[data-total="savings"]', yen(c.savings));
+  set('[data-rate]', pct(c.savingsRate));
+  root.querySelector('.bucket[data-kind="spend"]')?.classList.toggle('neg', c.spend < 0);
+  root.querySelector('[data-sec="variable"]')?.classList.toggle('neg', c.variable < 0);
+  for (const [k, v] of [['variable', c.variableLeft], ['savings', c.savingsLeft]]) {
+    const el = root.querySelector(`[data-left="${k}"]`);
+    if (!el) continue;
+    el.hidden = !v;
+    el.classList.toggle('neg', v < 0);
+    el.querySelector('b').textContent = yen(v);
+  }
+  const out = root.querySelector('[data-sp-out]');
+  if (out) out.innerHTML = surplusSplitHTML(c.surplus);
+  KB.renderHeader();
+  return c;
 }
 
 /** 生活費の棒の長さの基準（差し引く項目を除いた合計） */
@@ -2624,9 +2698,7 @@ function surplusSplitHTML(s) {
 }
 /** 入力中は全体を描き直さず、分け方の数字とヘッダーだけ更新する */
 function refreshSurplus() {
-  const out = $('#view-home [data-sp-out]');
-  if (out) out.innerHTML = surplusSplitHTML(calcPlanWithActual(plan()).surplus);
-  KB.renderHeader();
+  refreshHomeNumbers();
 }
 
 function setLivingEnabled(on) {
@@ -2636,8 +2708,69 @@ function setLivingEnabled(on) {
   commit({ immediate: true });
 }
 
+function homeItem(el) {
+  const row = el.closest('.er[data-id]');
+  if (!row) return null;
+  const kind = row.dataset.kind;
+  const item = (plan()[kind] || []).find((it) => it.id === row.dataset.id);
+  return item ? { kind, item, row } : null;
+}
+
 function setupHomeEvents() {
   const root = $('#view-home');
+  // 中のカテゴリをその場で直す
+  root.addEventListener('input', (e) => {
+    const t = e.target;
+    if (t.matches('[data-base]')) {
+      plan().savingsBase = toAmount(t.value);
+      plan().updatedAt = nowISO();
+      commit();
+      refreshHomeNumbers();
+      return;
+    }
+    const hit = homeItem(t);
+    if (!hit) return;
+    if (t.dataset.f === 'amount') {
+      const neg = hit.row.querySelector('.amt-wrap.is-neg');
+      hit.item.amount = (neg ? -1 : 1) * toAmount(t.value);
+    } else if (t.dataset.f === 'name') {
+      hit.item.name = t.value;
+    } else return;
+    touchItem(hit.item);
+    commit();
+    refreshHomeNumbers();
+  });
+  root.addEventListener('change', (e) => {
+    const t = e.target;
+    if (t.matches('[data-base]')) t.value = fmtInputAmount(toAmount(plan().savingsBase));
+    else if (t.dataset.f === 'amount' && homeItem(t)) t.value = fmtInputAmount(Math.abs(itemAmount(homeItem(t).kind, homeItem(t).item)));
+    else if (t.matches('[data-add-cat]')) {
+      if (!t.value) return;
+      const it = newItem('variable', { category: t.value });
+      plan().variable.push(it);
+      touchItem(it);
+      commit();
+      renderHome();
+      $(`#view-home .er[data-id="${it.id}"] [data-f="amount"]`)?.focus();
+      return;
+    } else return;
+    // 下のグラフだけ描き直す（入力欄はそのまま）
+    $('#home-charts').innerHTML = homeChartsHTML(plan(), calcPlanWithActual(plan()));
+  });
+  root.addEventListener('click', (e) => {
+    const add = e.target.closest('[data-add]');
+    if (!add) return;
+    const kind = add.dataset.add;
+    const it = newItem(kind);
+    plan()[kind].push(it);
+    touchItem(it);
+    commit();
+    renderHome();
+    $(`#view-home .er[data-id="${it.id}"] [data-f="name"]`)?.focus();
+  });
+  root.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && e.target.closest('.er')) e.target.blur();
+  });
   root.addEventListener('change', (e) => {
     if (!e.target.matches('[data-living-sw]')) return;
     setLivingEnabled(e.target.checked);

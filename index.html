@@ -41,6 +41,8 @@ html{height:100%;background:var(--bg);}
    iOS 側に画面の高さを広げさせる（JS で高さを足しても、短い位置で切られて効かない） */
 @media (display-mode: standalone){
   html{min-height:min(100lvh,calc(100% + env(safe-area-inset-top,0px)));}
+  /* iOS のステータスバーのぼかしが見出しの上にかからないよう、少し下げる */
+  header{padding-top:calc(env(safe-area-inset-top) + 14px);}
 }
 html,body{margin:0;padding:0;overscroll-behavior:none;}
 body{
@@ -65,7 +67,6 @@ header{
 .htitle{font-size:15px;font-weight:700;letter-spacing:.02em;}
 .hleft{display:flex;align-items:center;gap:10px;min-width:0;}
 .hright{display:flex;align-items:center;gap:6px;}
-.hlink{font-size:12px;font-weight:600;color:var(--text-2);text-decoration:none;border:1px solid var(--rule-2);border-radius:99px;padding:1px 9px;}
 .hsync{display:flex;align-items:center;justify-content:center;flex:none;width:28px;height:40px;padding:0;border:0;background:transparent;cursor:pointer;}
 .hgear{width:40px;height:40px;flex:none;border:0;border-radius:50%;background:transparent;color:var(--text-2);
   display:inline-flex;align-items:center;justify-content:center;cursor:pointer;}
@@ -82,13 +83,12 @@ header{
 .hsum .v{font-size:28px;font-weight:800;line-height:1.1;letter-spacing:-.02em;white-space:nowrap;}
 .hsum .v small{font-size:14px;font-weight:700;margin-left:2px;}
 .hsum .v.neg{color:var(--danger);}
-.hsum .hlink{flex:none;white-space:nowrap;}
+.setsw{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;margin:0 0 18px;background:var(--surface-2);border:1px solid var(--rule);border-radius:99px;}
+.setsw button{min-height:42px;border:0;border-radius:99px;background:transparent;color:var(--text-2);font:inherit;font-size:15px;font-weight:700;cursor:pointer;}
+.setsw button[aria-pressed="true"]{background:var(--btn-face);color:var(--text);box-shadow:var(--btn-raise),0 0 0 1px var(--rule);}
 .hsum .lb{flex:0 1 auto;}
 .hsum.tight .v{font-size:23px;}
 .hsum.tight .v small{font-size:12px;}
-.hsum.tighter .hlink{font-size:0;padding:0;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;}
-.hsum.tighter .hlink::after{content:"↗";font-size:13px;}
-.hsum.tightest .hlink{display:none;}
 .hsum.tightest .v{font-size:21px;}
 .hsum.tightest{gap:6px;}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;}
@@ -338,8 +338,6 @@ nav button[aria-current="true"] svg{stroke-width:2;color:var(--accent);}
   <div class="hsum">
     <div class="hleft">
       <span class="lb" id="sumLabel">今月の支出</span>
-      <!-- 資産管理アプリへのリンク。URLは設定画面で登録し端末内（localStorage）に保存。未登録なら出さない -->
-      <a id="assetLink" class="hlink" href="#" target="_blank" rel="noopener" aria-label="資産管理アプリ" hidden>資産 ↗</a>
     </div>
     <div class="v num" id="sumBox"><span id="sumVal">0</span><small>円</small></div>
     <button class="hsync" id="syncBtn" aria-label="今すぐ同期"><span class="dot off" id="dot"></span><span id="syncTxt" class="sr">未接続</span></button>
@@ -396,6 +394,10 @@ nav button[aria-current="true"] svg{stroke-width:2;color:var(--accent);}
 
   <!-- 設定 -->
   <section class="pane" id="p-set">
+    <div class="setsw" role="group" aria-label="設定の切り替え">
+      <button type="button" aria-pressed="true">家計簿</button>
+      <button type="button" id="setToPlan" aria-pressed="false">計画</button>
+    </div>
     <p class="lbl">接続</p>
     <div class="f"><input type="text" id="sUrl" placeholder="ウェブアプリのURL" aria-label="ウェブアプリのURL"></div>
     <div class="f"><input type="text" id="sToken" placeholder="合言葉" aria-label="合言葉"></div>
@@ -405,6 +407,7 @@ nav button[aria-current="true"] svg{stroke-width:2;color:var(--accent);}
     <p class="lbl" style="margin-top:26px">資産管理アプリ</p>
     <div class="f"><input type="text" id="sAssetUrl" placeholder="資産管理アプリのURL" aria-label="資産管理アプリのURL"></div>
     <button class="btn sub" id="sAssetSave">保存</button>
+    <a class="btn sub" id="sAssetOpen" href="#" target="_blank" rel="noopener" style="margin-top:9px" hidden>開く</a>
     <p class="lbl" style="margin-top:26px">読み込む期間</p>
     <div class="f"><div class="chips" id="sRange"></div></div>
     <p class="lbl" style="margin-top:26px">カテゴリ</p>
@@ -565,7 +568,10 @@ h1, h2, h3 { margin: 0; line-height: 1.3; }
 .pbar { display: flex; align-items: center; gap: 8px; }
 .pbar select { flex: 1; font-weight: 700; font-size: 17px; min-height: 46px; }
 .pbar .btn { min-height: 46px; }
-.subnav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 4px; margin: 10px 0 0; background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; }
+.pbar[hidden], .subnav[hidden] { display: none; }
+.setsw { margin: 0 0 6px; }
+.view[data-view="settings"] { padding-top: 0; }
+.subnav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; margin: 10px 0 0; background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; }
 .subnav a { display: flex; align-items: center; justify-content: center; min-height: 40px; border-radius: 9px; color: var(--text-2); font-size: 14.5px; font-weight: 700; text-decoration: none; }
 .subnav a[aria-current="page"] { background: var(--btn-face); color: var(--text); box-shadow: var(--btn-raise), 0 0 0 1px var(--rule); }
 .sync-note { margin-top: 10px; padding: 10px 12px; border-radius: 12px; font-size: 13px; line-height: 1.55; background: var(--warn-bg); border: 1px solid var(--warn-border); color: var(--warn); }
@@ -904,10 +910,9 @@ input, select { border-radius: 14px; }
   <select id="month-select" aria-label="対象月"></select>
   <button id="new-month-btn" class="btn" type="button" aria-label="新しい月を作成">＋月</button>
 </div>
-<div class="subnav" aria-label="計画の画面">
+<div class="subnav" id="plan-subnav" aria-label="計画の画面">
   <a href="#plan/home" data-nav="home">ホーム</a>
   <a href="#plan/input" data-nav="input">入力</a>
-  <a href="#plan/settings" data-nav="settings">計画の設定</a>
 </div>
 <div id="sync-note" class="sync-note hidden" role="status"></div>
 <section id="view-home" class="view" data-view="home"></section>
@@ -1048,11 +1053,16 @@ function applyUpdate(id,patch){
 }
 
 /* ===== 画面切替 ===== */
+/* 設定（家計簿の設定・計画の設定）を開いているときは、下のタブではなく右上の歯車を選択中にする */
+function markNav(){
+  var ps=view.pane==='plan'&&window.PlanApp&&window.PlanApp.inSettings&&window.PlanApp.inSettings();
+  document.querySelectorAll('nav button').forEach(function(b){b.setAttribute('aria-current',(!ps&&b.dataset.p===view.pane)?'true':'false');});
+  $('gearBtn').setAttribute('aria-current',(view.pane==='set'||ps)?'true':'false');
+}
 function show(p){
   view.pane=p;
   document.querySelectorAll('.pane').forEach(function(el){el.classList.toggle('on',el.id==='p-'+p);});
-  document.querySelectorAll('nav button').forEach(function(b){b.setAttribute('aria-current',b.dataset.p===p?'true':'false');});
-  $('gearBtn').setAttribute('aria-current',p==='set'?'true':'false');
+  markNav();
   /* 計画タブは URL の #plan/... で画面を切り替える。ほかのタブではハッシュを消す */
   if(p!=='plan'&&location.hash) history.replaceState(null,'',location.pathname+location.search);
   MAIN().scrollTop=0;
@@ -1067,7 +1077,12 @@ document.querySelector('nav').addEventListener('click',function(e){
   }
   show(b.dataset.p);
 });
-$('gearBtn').addEventListener('click',function(){show('set');});
+/* 歯車: 計画タブにいるときは計画の設定、それ以外は家計簿の設定。設定の中の切り替えで行き来できる */
+$('gearBtn').addEventListener('click',function(){
+  if(view.pane==='plan'&&window.PlanApp) location.hash='#plan/settings';
+  else show('set');
+});
+$('setToPlan').addEventListener('click',function(){location.hash='#plan/settings';});
 $('syncBtn').addEventListener('click',function(){if(CFG.url&&CFG.token) sync(false);});
 
 /* ===== 集計 ===== */
@@ -1078,11 +1093,11 @@ function sum(list){return list.reduce(function(a,b){return a+(Number(b.amount)||
 function pending(){return DATA.items.filter(function(x){return x.status!=='承認済';});}
 
 /* ===== 描画 ===== */
-/* 項目名（例「変動費の残り」）が切れないように、金額を小さくし、それでも足りなければ資産リンクを ↗ だけにする */
+/* 項目名（例「11月の支出」）が切れないように、金額の文字を小さくする */
 function fitHeader(){
   var hs=document.querySelector('.hsum'),lb=$('sumLabel');
   if(!hs||!lb)return;
-  var steps=['tight','tighter','tightest'];
+  var steps=['tight','tightest'];
   hs.classList.remove.apply(hs.classList,steps);
   for(var i=0;i<steps.length&&lb.scrollWidth>lb.clientWidth+1;i++) hs.classList.add(steps[i]);
 }
@@ -1098,7 +1113,8 @@ function renderHeaderText(){
     var h=window.PlanApp.header();
     $('sumLabel').textContent=h.label;
     $('sumVal').textContent=h.value;
-    $('sumBox').classList.toggle('neg',h.neg);
+    $('sumBox').classList.toggle('neg',!!h.neg);
+    $('sumBox').classList.toggle('hide',!!h.hide);
     return;
   }
   if(view.pane==='approve'){
@@ -1573,7 +1589,7 @@ $('mDel').addEventListener('click',function(){
 
 /* ===== 設定 ===== */
 function renderAssetLink(){
-  var a=$('assetLink');
+  var a=$('sAssetOpen');
   a.hidden=!CFG.assetUrl;
   a.href=CFG.assetUrl||'#';
 }
@@ -1726,6 +1742,7 @@ window.KB={
   show:function(p){show(p);},
   pane:function(){return view.pane;},
   renderHeader:function(){renderHeader();},
+  markNav:function(){markNav();},
   ask:ask
 };
 
@@ -3328,6 +3345,11 @@ function renderSettings() {
   const planCount = sortedMonths().length;
   const legacy = Cache.legacy();
   $('#view-settings').innerHTML = `
+    <div class="subnav setsw" role="group" aria-label="設定の切り替え">
+      <a href="#" data-go-ledger-settings>家計簿</a>
+      <a href="#plan/settings" aria-current="page">計画</a>
+    </div>
+
     <h2 class="section-title">基準の配分</h2>
     <div class="card base-card">${baselineRowsHTML()}</div>
 
@@ -3499,6 +3521,11 @@ function setupCategoryDrag(root) {
 function setupSettingsEvents() {
   const root = $('#view-settings');
   setupCategoryDrag(root);
+  root.addEventListener('click', (e) => {
+    if (!e.target.closest('[data-go-ledger-settings]')) return;
+    e.preventDefault();
+    KB.show('set');
+  });
 
   // 基準の配分: どれを直しても合計が基準の手取りになるよう、支出（支出を直したときは貯金）で合わせる
   root.addEventListener('input', (e) => {
@@ -3673,6 +3700,11 @@ function applyRoute() {
   if (state.view === 'home') renderHome();
   if (state.view === 'input') renderInputPane();
   if (state.view === 'settings') renderSettingsKeepOpen();
+  // 設定のときは月の選択と ホーム/入力 の切り替えを隠す（上の切り替えで家計簿の設定へ行ける）
+  $('.pbar').hidden = state.view === 'settings';
+  $('#plan-subnav').hidden = state.view === 'settings';
+  KB.markNav();
+  KB.renderHeader();
   scroller().scrollTop = 0;
   if (state.view === 'input' && itemId) revealEditTarget(decodeURIComponent(itemId));
 }
@@ -3725,19 +3757,14 @@ function startApp() {
 }
 
 window.PlanApp = {
-  /** 家計簿のヘッダーに出す内容（その月の予備費） */
+  /** 家計簿のヘッダーに出す内容（計画では何も出さない。設定のときは「設定」） */
   header() {
-    const c = calcPlanWithActual(plan());
-    const fmt = (v) => (v < 0 ? '−' : '') + nf.format(Math.abs(Math.round(v)));
-    // 家計簿とつながっていれば「変動費の残り」（予算 − 使った金額）。なければ予備費
-    if (c.actual.ready && variableBudget(c) > 0) {
-      const left = variableBudget(c) - variableActual(c);
-      return { label: '変動費の残り', value: fmt(left), neg: left < 0 };
-    }
-    return { label: '変動費', value: fmt(c.variable), neg: c.variable < 0 };
+    return { label: state.view === 'settings' ? '設定' : '', value: '', hide: true };
   },
+  inSettings: () => state.view === 'settings',
   pull,
-  lastRoute: () => lastHash,
+  // 下の「計画」タブから戻るときは、設定ではなくホームか入力へ
+  lastRoute: () => (/^#plan\/settings/.test(lastHash) ? '#plan/home' : lastHash),
   /** 家計簿の明細やカテゴリが変わったとき（実績を描き直す） */
   onLedgerChange() {
     if (!state.data) return;

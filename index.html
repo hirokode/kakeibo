@@ -1678,6 +1678,38 @@ window.addEventListener('online',function(){flush();sync(true);});
 document.addEventListener('visibilitychange',function(){
   if(!document.hidden&&CFG.url&&CFG.token) sync(true);
 });
+
+/* 新しい版の確認: 開いたとき・アプリに戻ったときに index.html を取り直し、
+   スクリプト・スタイル・計画の template が今と違えば読み直す（iOS のホーム画面アプリは前の版のまま残りやすいため） */
+function codeSig(doc){
+  var t='',i,n=doc.querySelectorAll('script:not([src]),style');
+  for(i=0;i<n.length;i++) t+=n[i].textContent;
+  var tp=doc.getElementById('planTpl'); if(tp) t+=tp.innerHTML;
+  var h=2166136261;
+  for(i=0;i<t.length;i++){h^=t.charCodeAt(i);h=Math.imul(h,16777619)>>>0;}
+  return h+':'+t.length;
+}
+var APP_SIG='',updAt=0;
+// このスクリプトの後ろ（計画の script など）がまだ読まれていないので、読み終わってから控える
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',function(){APP_SIG=codeSig(document);});
+else APP_SIG=codeSig(document);
+function editing(){
+  var a=document.activeElement;
+  if(a&&a.shadowRoot&&a.shadowRoot.activeElement) a=a.shadowRoot.activeElement;
+  return !!(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
+}
+function checkUpdate(){
+  var now=Date.now();
+  if(!APP_SIG||now-updAt<10000||!window.fetch||!window.DOMParser) return;
+  updAt=now;
+  fetch(location.pathname,{cache:'reload'}).then(function(r){return r.ok?r.text():'';}).then(function(html){
+    if(!html||codeSig(new DOMParser().parseFromString(html,'text/html'))===APP_SIG||editing()) return;
+    try{ if(+sessionStorage.getItem('kb-upd')>now-60000) return; sessionStorage.setItem('kb-upd',String(now)); }catch(e){}
+    location.reload();
+  }).catch(function(){});
+}
+setTimeout(checkUpdate,1500);
+document.addEventListener('visibilitychange',function(){ if(!document.hidden) checkUpdate(); });
 })();
 </script>
 <script>

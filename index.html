@@ -630,6 +630,12 @@ h1, h2, h3 { margin: 0; line-height: 1.3; }
 @media (max-width: 370px) { .xrow.has-sw .caret { display: none; } }
 .item.living-sw { margin-bottom: 10px; }
 .xrow.is-off .xtoggle .v { color: var(--text-3); text-decoration: line-through; }
+.xrow.neg .xtoggle .v, .srow.auto.neg .sv, .grp-sum.neg b { color: var(--danger); }
+.grp-sum { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 14px 16px 12px; border-bottom: 1px solid var(--div); font-weight: 750; }
+.grp-sum span { font-size: 16px; }
+.grp-sum b { font-size: 20px; font-weight: 800; }
+.grp-card > .status { margin: 0; border-radius: 0; border-left: 0; border-right: 0; border-bottom: 0; }
+.surplus { margin-top: 0 !important; }
 .xrow.is-off .swatch { opacity: .4; }
 .srow.is-off .st, .srow.is-off .sv { color: var(--text-3); }
 .srow.is-off .sv { text-decoration: line-through; }
@@ -735,6 +741,8 @@ a.leg-row:active { background: var(--surface-2); }
 .neg-btn[aria-pressed="true"] { background: var(--btn-accent-face) !important; box-shadow: var(--btn-accent-raise) !important; color: var(--accent-ink) !important; border-color: #275c47 !important; }
 .auto-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 48px; margin-bottom: 10px; padding: 8px 16px; border: 1px dashed var(--rule-2); border-radius: 14px; color: var(--text-2); font-weight: 700; text-decoration: none; }
 .auto-row b { color: var(--text); font-size: 16px; }
+.auto-row.neg b { color: var(--danger); }
+.auto-row[hidden] { display: none; }
 .payday { flex: 0 0 6.2em; }
 @media (max-width: 370px) { .amt-wrap { flex-basis: 7em; } .payday { flex-basis: 5.6em; } }
 .stype { flex: 0 0 7.4em; }
@@ -1801,7 +1809,7 @@ function pull() {
       sync.pulled = true;
       let remote = null;
       if (raw && typeof raw === 'object' && raw.plans) {
-        // 古い plan.gs は「手取りの実績」「上振れの貯金割合」「生活費」を保存しないので、そのときは端末の値を残す
+        // 古い plan.gs は「手取りの実績」「上振れの貯金割合」「生活費」「毎月の貯金」を保存しないので、そのときは端末の値を残す
         for (const [m, rp] of Object.entries(raw.plans)) {
           const lp = state.data && state.data.plans[m];
           if (!rp || !lp) continue;
@@ -1809,6 +1817,7 @@ function pull() {
           if (rp.surplusSaveRate === undefined) rp.surplusSaveRate = lp.surplusSaveRate;
           if (rp.living === undefined) rp.living = lp.living;
           if (rp.livingEnabled === undefined) rp.livingEnabled = lp.livingEnabled;
+          if (rp.savingsBase === undefined) rp.savingsBase = lp.savingsBase;
         }
         remote = normalizeData(raw);
       }
@@ -1880,6 +1889,8 @@ function newPlan(month) {
     surplusSaveRate: DEFAULT_SURPLUS_SAVE_RATE,
     // 生活費（仮）を手取りから引くか
     livingEnabled: true,
+    // 毎月の貯金（基準の手取りのときの貯金。上振れ分の貯金はこれに足す）
+    savingsBase: 0,
     income: [], living: [], fixed: [], savings: [], variable: [],
   };
 }
@@ -1891,6 +1902,7 @@ function copyPlan(src, month) {
   p.variableTotal = toAmount(src.variableTotal);
   p.surplusSaveRate = normRate(src.surplusSaveRate); // 割合は引き継ぎ、手取りの実績は空にする
   p.livingEnabled = src.livingEnabled !== false;
+  p.savingsBase = toAmount(src.savingsBase);
   for (const kind of PLAN_KINDS) {
     p[kind] = (src[kind] || []).map((it) => ({ ...clone(it), id: newId(), updatedAt: p.createdAt }));
   }
@@ -1988,6 +2000,7 @@ function normalizeData(raw) {
       surplusSaveRate: normRate(p.surplusSaveRate),
       livingEnabled: p.livingEnabled !== false,
     };
+    const hasBase = p.savingsBase !== undefined && p.savingsBase !== null && p.savingsBase !== '';
     for (const kind of PLAN_KINDS) {
       plan[kind] = (Array.isArray(p[kind]) ? p[kind] : []).filter((it) => it && typeof it === 'object').map((it) => {
         const item = { id: str(it.id) || newId(), enabled: it.enabled !== false };
@@ -1998,6 +2011,8 @@ function normalizeData(raw) {
         return item;
       });
     }
+    // 毎月の貯金がまだない月は、今の貯金の項目の合計から始める
+    plan.savingsBase = hasBase ? toAmount(p.savingsBase) : sumEnabled(plan.savings);
     out.plans[month] = plan;
   }
   return out;
@@ -2015,22 +2030,28 @@ const sumEnabled = (items) => items.reduce((s, it) => s + (it.enabled ? toAmount
 const sumSigned = (items) => items.reduce((s, it) => s + (it.enabled ? toSignedAmount(it.amount) : 0), 0);
 
 /**
- * 手取りを入れた月は、収入＝手取り、貯金と変動費に上振れ分（下振れなら変動費から引く）を足した合計にする。
- * 内訳（項目）は手で入れたまま。予備費は変わらない。
+ * 手取りから 生活費・支出・貯金 を決める（内訳はオーナーが入れる）。
+ *   手取り   ＝ 入れた手取り（なければ収入の項目の合計＝基準）
+ *   生活費   ＝ 生活費の項目の合計（スイッチを切ると 0）
+ *   貯金     ＝ 毎月の貯金 ＋ 基準を超えた分 × 貯金の割合
+ *   支出     ＝ 手取り − 生活費 − 貯金
+ *   変動費   ＝ 支出 − 固定費（カテゴリの項目に分け、残りは「未配分」）
  */
 function calcPlanFull(p) {
   const c = calcPlan(p, cats().savingsType);
+  c.base = c.income;
   c.surplus = calcSurplus(p, c);
   const s = c.surplus;
-  if (s.entered) {
-    c.incomeBase = c.income;
-    c.income = s.actual;
-    c.savings += s.save;
-    c.variable += s.play;
-    if (c.variable < 0) c.variable = 0; // 下振れが変動費より大きいときは、予備費が減る
-    finishTotals(c, p);
-  }
-  return c;
+  c.income = s.entered ? s.actual : c.base;
+  c.savingsItems = c.savings;
+  c.variableItems = sumEnabled(p.variable);
+  c.savings = toAmount(p.savingsBase) + (s.entered ? s.save : 0);
+  c.spend = c.income - c.living - c.savings;
+  c.variable = c.spend - c.fixed;
+  c.variableIsTotal = false;
+  c.variableLeft = c.variable - c.variableItems;
+  c.savingsLeft = c.savings - c.savingsItems;
+  return finishTotals(c, p);
 }
 
 function calcPlanWithActual(p) {
@@ -2057,8 +2078,8 @@ function calcSurplus(p, c) {
 /** 合計から、支出＋貯金・予備費・割合などを出し直す */
 function finishTotals(c, plan) {
   const ratio = (v) => (c.income > 0 ? v / c.income : null);
-  c.spendAndSave = c.living + c.fixed + c.variable + c.savings; // 支出＋貯金
-  c.reserve = c.income - c.spendAndSave;                         // 予備費
+  c.spendAndSave = c.living + c.fixed + Math.max(0, c.variable) + c.savings; // 生活費＋支出＋貯金
+  c.reserve = c.income - c.spendAndSave;                                      // マイナスなら足りない
   c.savingsRate = ratio(c.savings);
   c.share = { living: ratio(c.living), fixed: ratio(c.fixed), variable: ratio(c.variable), savings: ratio(c.savings), reserve: ratio(c.reserve) };
   c.days = daysInMonth(plan.month);
@@ -2305,9 +2326,8 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && $('#moda
 const SERIES = [
   { key: 'living', label: '生活費', color: 'var(--series-living)', tab: 'living' },
   { key: 'fixed', label: '固定費', color: 'var(--series-fixed)', tab: 'fixed' },
-  { key: 'variable', label: '変動費予算', color: 'var(--series-variable)', tab: 'variable' },
-  { key: 'savings', label: '貯金・投資', color: 'var(--series-savings)', tab: 'savings' },
-  { key: 'reserve', label: '予備費', color: 'var(--series-reserve)' },
+  { key: 'variable', label: '変動費', color: 'var(--series-variable)', tab: 'variable' },
+  { key: 'savings', label: '貯金', color: 'var(--series-savings)', tab: 'savings' },
 ];
 
 function allocationHTML(c) {
@@ -2317,7 +2337,7 @@ function allocationHTML(c) {
   const over = c.reserve < 0;
   // 予備費がマイナスのときは「支出＋貯金」を 100% として描き、収入の位置に線を引く
   const base = over ? c.spendAndSave : c.income;
-  const parts = SERIES.filter((s) => !(over && s.key === 'reserve'))
+  const parts = SERIES
     .map((s) => ({ ...s, value: c[s.key] }))
     .filter((s) => s.value > 0);
   const segs = parts.map((s) => {
@@ -2330,7 +2350,7 @@ function allocationHTML(c) {
     const incomePos = (c.income / base) * 100;
     overlay = `
       <div class="alloc-over" style="left:${incomePos}%"></div>
-      <div class="alloc-marker ${incomePos < 25 ? 'at-start' : incomePos > 75 ? 'at-end' : ''}" style="left:${incomePos}%"><span>収入 ${yen(c.income)}</span></div>`;
+      <div class="alloc-marker ${incomePos < 25 ? 'at-start' : incomePos > 75 ? 'at-end' : ''}" style="left:${incomePos}%"><span>手取り ${yen(c.income)}</span></div>`;
   }
   const rows = SERIES.filter((s) => s.key !== 'living' || c.living).map((s) => {
     const v = c[s.key];
@@ -2348,7 +2368,7 @@ function allocationHTML(c) {
       <div class="alloc-bar">${segs}</div>
       ${overlay}
     </div>
-    <div class="alloc-scale"><span>0</span><span>${over ? '支出＋貯金 ' + yen(c.spendAndSave) : '収入 ' + yen(c.income)}</span></div>
+    <div class="alloc-scale"><span>0</span><span>${over ? yen(c.spendAndSave) : '手取り ' + yen(c.income)}</span></div>
     <div class="legend" aria-label="収入比の配分">${rows}</div>`;
 }
 
@@ -2387,17 +2407,14 @@ function homeSubItems(kind, p, c) {
 
 /** 手取りを入れた月の、上振れ（下振れ）分の行。収入・貯金・変動費に出す */
 function autoAmount(kind, c) {
-  const s = c.surplus;
-  if (!s || !s.entered || !s.diff) return 0;
-  if (kind === 'income') return s.diff;
-  if (kind === 'savings') return s.save;
-  if (kind === 'variable') return s.play;
+  if (kind === 'savings') return c.savingsLeft;
+  if (kind === 'variable') return c.variableLeft;
   return 0;
 }
-const autoTitle = (v) => (v < 0 ? '下振れ分' : '上振れ分');
+const autoTitle = () => '未配分';
 
 /** タップで小項目が開く行（右の鉛筆はその入力タブへ、小項目はその項目の編集位置へ） */
-function expandRowHTML({ kind, title, sub, value, total, minus, p, c, sw, off }) {
+function expandRowHTML({ kind, title, sub, value, total, minus, p, c, sw, off, neg }) {
   const open = state.homeOpen.has(kind);
   const color = GROUP_COLORS[kind];
   const subs = kind === 'variable' && c.variableIsTotal
@@ -2406,9 +2423,9 @@ function expandRowHTML({ kind, title, sub, value, total, minus, p, c, sw, off })
   const auto = autoAmount(kind, c);
   if (auto) subs.push({ auto: true, title: autoTitle(auto), amount: auto, enabled: true });
   // 出ていくお金は「−」、差し引く項目や下振れは「＋」で見せる
-  const show = (v, isAuto) => (minus
-    ? (v > 0 ? '−' + yen(v) : v < 0 ? '+' + yen(-v) : yen(0))
-    : (isAuto && v > 0 ? '+' : '') + yen(v));
+  const show = (v, isAuto) => (isAuto ? yen(v)
+    : minus ? (v > 0 ? '−' + yen(v) : v < 0 ? '+' + yen(-v) : yen(0))
+    : yen(v));
   const subHTML = subs.length ? subs.map((x) => {
     const w = total > 0 && x.enabled && x.amount > 0 ? Math.max(1.5, (x.amount / total) * 100) : 0;
     const inner = `
@@ -2418,14 +2435,14 @@ function expandRowHTML({ kind, title, sub, value, total, minus, p, c, sw, off })
           <span class="sbar" aria-hidden="true"><i style="width:${w}%;background:${color}"></i></span>
         </span>
         <span class="sv num">${show(x.amount, x.auto)}</span>`;
-    if (x.auto) return `<div class="srow auto">${inner}<span class="edit-ico" aria-hidden="true"></span></div>`;
+    if (x.auto) return `<div class="srow auto ${x.amount < 0 ? 'neg' : ''}">${inner}<span class="edit-ico" aria-hidden="true"></span></div>`;
     return `<a class="srow ${x.enabled ? '' : 'is-off'}" href="#plan/input/${kind}/${esc(x.id)}" aria-label="${esc(x.title)} を編集">${inner}
         <span class="edit-ico" aria-hidden="true">${ICON_EDIT}</span>
       </a>`;
   }).join('')
     : `<a class="srow" href="#plan/input/${kind}"><span class="sl"><span class="st muted">まだ項目がありません</span></span><span class="add-link">追加する</span></a>`;
   return `
-    <div class="xrow ${open ? 'open' : ''} ${off ? 'is-off' : ''} ${sw ? 'has-sw' : ''}" data-kind="${kind}">
+    <div class="xrow ${open ? 'open' : ''} ${off ? 'is-off' : ''} ${sw ? 'has-sw' : ''} ${neg ? 'neg' : ''}" data-kind="${kind}">
       <div class="xhead">
         <button type="button" class="xtoggle" data-toggle="${kind}" aria-expanded="${open}" aria-controls="subs-${kind}">
           <span class="swatch" style="background:${color}"></span>
@@ -2440,7 +2457,7 @@ function expandRowHTML({ kind, title, sub, value, total, minus, p, c, sw, off })
     </div>`;
 }
 
-/** 遊びに使える変動費の予算（計画 ＋ 上振れのうち遊びの分。calcPlanFull で足してある） */
+/** 遊びに使える変動費の予算（支出 − 固定費） */
 function variableBudget(c) {
   return Math.max(0, c.variable);
 }
@@ -2512,15 +2529,14 @@ function monthTrendHTML() {
   const H = 140;
   const seg = (v, color) => (v > 0 ? `<i style="height:${Math.max(2, (v / max) * H)}px;background:${color}"></i>` : '');
   const cols = data.map(({ m, c }) => {
-    const label = `${monthLabel(m)}: 収入 ${yen(c.income)}、生活費 ${yen(c.living)}、固定費 ${yen(c.fixed)}、変動費 ${yen(c.variable)}、貯金 ${yen(c.savings)}、予備費 ${yen(c.reserve)}`;
+    const label = `${monthLabel(m)}: 手取り ${yen(c.income)}、生活費 ${yen(c.living)}、固定費 ${yen(c.fixed)}、変動費 ${yen(c.variable)}、貯金 ${yen(c.savings)}`;
     return `
       <button type="button" class="mcol ${m === state.month ? 'cur' : ''}" data-month="${m}" title="${esc(label)}" aria-label="${esc(label)}">
         <span class="mplot" style="height:${H}px">
-          <span class="mstack">${seg(c.living, 'var(--series-living)')}${seg(c.fixed, 'var(--series-fixed)')}${seg(c.variable, 'var(--series-variable)')}${seg(c.savings, 'var(--series-savings)')}</span>
+          <span class="mstack">${seg(c.living, 'var(--series-living)')}${seg(c.fixed, 'var(--series-fixed)')}${seg(Math.max(0, c.variable), 'var(--series-variable)')}${seg(c.savings, 'var(--series-savings)')}</span>
           ${c.income > 0 ? `<span class="mincome" style="bottom:${(c.income / max) * H}px"></span>` : ''}
         </span>
         <span class="mlabel">${Number(m.slice(5))}月</span>
-        <span class="mres num ${c.reserve < 0 ? 'neg' : ''}">${shortYen(c.reserve)}</span>
       </button>`;
   }).join('');
   return `
@@ -2531,7 +2547,7 @@ function monthTrendHTML() {
         <span><span class="swatch" style="background:var(--series-fixed)"></span>固定費</span>
         <span><span class="swatch" style="background:var(--series-variable)"></span>変動費</span>
         <span><span class="swatch" style="background:var(--series-savings)"></span>貯金</span>
-        <span><span class="line-swatch"></span>収入</span>
+        <span><span class="line-swatch"></span>手取り</span>
       </div>
       <div class="trend">${cols}</div>
       <p class="chart-note">${months.length < 2 ? '月を追加すると、ここに推移が並びます。' : '棒が線（収入）より上に出ている月は予算オーバーです。'}タップするとその月に切り替わります。</p>
@@ -2541,65 +2557,38 @@ function monthTrendHTML() {
 function renderHome() {
   const p = plan();
   const c = calcPlanWithActual(p);
-  const neg = c.reserve < 0;
-  const spend = c.living + c.fixed + c.variable;
-  let status = '';
-  if (neg) {
-    status = `<div class="status bad" role="alert"><div><strong>${yen(-c.reserve)} 足りません</strong>
-      <div><a class="btn small danger" href="#plan/input/variable">見直す</a></div></div></div>`;
-  } else if (c.income <= 0) {
-    status = `<a class="btn small primary" href="#plan/input/income">収入を入れる</a>`;
-  }
-
-  const count = (kind) => p[kind].filter((i) => i.enabled).length;
-  const minus = (v) => (v > 0 ? '−' + yen(v) : yen(v));
-  const typeSummary = c.savingsByType.filter((t) => t.amount > 0).map((t) => `${t.type} ${yen(t.amount)}`).join(' · ');
+  const minus = (v) => (v > 0 ? '−' + yen(v) : v < 0 ? '+' + yen(-v) : yen(0));
+  const short = c.variable < 0;
 
   $('#view-home').innerHTML = `
-    <div class="card hero ${neg ? 'is-negative' : ''}">
-      <div class="hero-label">予備費</div>
-      <div class="hero-value num">${yen(c.reserve)}</div>
-      <div class="equation num"><span class="in">収入 <b>${yen(c.income)}</b></span> − <span class="out">支出 <b>${yen(spend)}</b></span> − <span class="save">貯金 <b>${yen(c.savings)}</b></span></div>
-      ${status}
-    </div>
-
     ${surplusCardHTML(p, c)}
 
-    <section class="grp tone-in">
-      <h2 class="grp-head"><span class="sign" aria-hidden="true">＋</span>入るお金<span class="grp-total num">${yen(c.income)}</span></h2>
-      <div class="grp-card">
-        ${expandRowHTML({ kind: 'income', title: '収入', sub: '', value: yen(c.income), total: c.income, p, c })}
-      </div>
-    </section>
-
     <section class="grp tone-living">
-      <h2 class="grp-head"><span class="sign" aria-hidden="true">生</span>生活費<span class="grp-total num">${minus(c.living)}</span></h2>
       <div class="grp-card">
-        ${expandRowHTML({ kind: 'living', title: '生活費', sub: '', value: minus(c.livingItems), total: livingGross(p), minus: true, p, c, off: !c.livingOn,
+        ${expandRowHTML({ kind: 'living', title: '生活費', sub: '', value: minus(c.living || (c.livingOn ? 0 : sumSigned(p.living))), total: livingGross(p), minus: true, p, c, off: !c.livingOn,
           sw: `<label class="sw xsw-in" title="手取りから引く"><input type="checkbox" data-living-sw ${c.livingOn ? 'checked' : ''} aria-label="仮生活費（手取りから引く）"><span></span></label>` })}
       </div>
     </section>
 
     <section class="grp tone-out">
-      <h2 class="grp-head"><span class="sign" aria-hidden="true">−</span>出ていくお金<span class="grp-total num">${minus(c.fixed + c.variable)}</span></h2>
       <div class="grp-card">
-        ${expandRowHTML({ kind: 'fixed', title: '固定費', sub: '', value: minus(c.fixed), total: c.fixed, minus: true, p, c })}
-        ${expandRowHTML({ kind: 'variable', title: '変動費', sub: '', value: minus(c.variable), total: c.variable, minus: true, p, c })}
+        <div class="grp-sum ${c.spend < 0 ? 'neg' : ''}"><span>支出</span><b class="num">${minus(c.spend)}</b></div>
+        ${expandRowHTML({ kind: 'fixed', title: '固定費', sub: '', value: minus(c.fixed), total: Math.max(c.spend, c.fixed), minus: true, p, c })}
+        ${expandRowHTML({ kind: 'variable', title: '変動費', sub: '', value: minus(c.variable), total: Math.max(0, c.variable), minus: true, p, c, neg: short })}
+        ${short ? `<div class="status bad" role="alert"><strong>${yen(-c.variable)} 足りません</strong></div>` : ''}
       </div>
     </section>
 
     <section class="grp tone-save">
-      <h2 class="grp-head"><span class="sign" aria-hidden="true">貯</span>貯めるお金<span class="grp-total num">${yen(c.savings)}</span></h2>
       <div class="grp-card">
-        ${expandRowHTML({ kind: 'savings', title: '貯金・投資', sub: '', value: yen(c.savings), total: c.savings, p, c })}
+        ${expandRowHTML({ kind: 'savings', title: '貯金', sub: '', value: yen(c.savings), total: c.savings, p, c })}
         <div class="grp-foot"><span>貯蓄率</span><b class="num">${pct(c.savingsRate)}</b></div>
       </div>
     </section>
 
     <section class="grp tone-chart">
-      <h2 class="grp-head"><span class="sign" aria-hidden="true">${ICON_CHART}</span>グラフ</h2>
       <div class="card">
-        <div class="chart-title">収入の使い道</div>
+        <div class="chart-title">手取りの使い道</div>
         ${allocationHTML(c)}
       </div>
       ${budgetActualHTML(p, c)}
@@ -2783,11 +2772,15 @@ function renderInputTabs(c) {
     </button>`).join('');
 }
 
+/** 入力画面の上: そのタブの合計（アプリが決めた額） */
+const MINI = { income: ['手取り', 'income'], living: ['生活費', 'living'], fixed: ['支出', 'spend'], savings: ['貯金', 'savings'], variable: ['変動費', 'variable'] };
 function renderMiniSummary(c) {
   const el = $('#mini-summary');
-  el.classList.toggle('is-negative', c.reserve < 0);
+  const [k, key] = MINI[state.tab] || MINI.income;
+  const v = c[key];
+  el.classList.toggle('is-negative', v < 0);
   el.innerHTML = `
-    <div class="reserve"><div class="k">予備費</div><div class="v num">${yen(c.reserve)}</div></div>`;
+    <div class="reserve"><div class="k">${k}</div><div class="v num">${yen(v)}</div></div>`;
 }
 
 function paneFootHTML(kind, c) {
@@ -2800,7 +2793,7 @@ function paneFootHTML(kind, c) {
     sub = `<div class="total-sub"><span>週あたり <b class="num">${yen(c.variableWeekly)}</b></span><span>1日あたり <b class="num">${yen(c.variableDaily)}</b></span></div>`;
   }
   const note = kind === 'variable' && c.variableIsTotal ? '全体で入力' : `有効 ${on}/${items.length}件`;
-  const total = kind === 'living' ? c.livingItems : c[kind];
+  const total = kind === 'living' ? c.livingItems : kind === 'savings' ? c.savingsItems : kind === 'variable' ? c.variableItems : kind === 'income' ? c.base : c[kind];
   return `
     <div class="total-row"><span>合計</span><span class="v num">${yen(total)}</span></div>
     ${sub}`;
@@ -2808,9 +2801,18 @@ function paneFootHTML(kind, c) {
 
 /** 手取りを入れた月は、上振れ（下振れ）分を内訳の上に出す（ここでは変えられない。ホームの手取りとスライダーで決まる） */
 function autoRowHTML(kind, c) {
+  if (kind !== 'savings' && kind !== 'variable') return '';
   const v = autoAmount(kind, c);
-  if (!v) return '';
-  return `<a class="auto-row" href="#plan/home"><span>${autoTitle(v)}</span><b class="num">${v > 0 ? '+' : ''}${yen(v)}</b></a>`;
+  return `<div class="auto-row ${v < 0 ? 'neg' : ''}" id="auto-row" ${v ? '' : 'hidden'}><span>${autoTitle(v)}</span><b class="num">${yen(v)}</b></div>`;
+}
+
+/** 貯金タブの上: 毎月の貯金（基準の手取りのとき）。上振れ分の貯金はこれに足される */
+function savingsBaseHTML(p) {
+  return `
+    <div class="item living-sw">
+      <div class="row"><span class="grow vt-label">毎月の貯金</span>
+        <div class="amt-wrap"><input data-plan-f="savingsBase" inputmode="numeric" autocomplete="off" enterkeyhint="done" value="${fmtInputAmount(toAmount(p.savingsBase))}" placeholder="0" aria-label="毎月の貯金"></div></div>
+    </div>`;
 }
 
 /** 生活費の上のスイッチ（仮生活費を手取りから引くか） */
@@ -2834,11 +2836,8 @@ function renderInputPane() {
     : `<a class="btn ghost" href="#plan/home">ホームへ</a>`;
 
   // 変動費を「全体で入力」するとき
-  const modeSwitch = kind === 'variable' ? `
-    <div class="seg-ctl" role="group" aria-label="変動費の入れ方">
-      <button type="button" data-vmode="total" aria-pressed="${c.variableIsTotal}">全体で入力</button>
-      <button type="button" data-vmode="items" aria-pressed="${!c.variableIsTotal}">項目別に入力</button>
-    </div>` : '';
+  // 変動費は「支出 − 固定費」でアプリが決めるので、全体で入れる切り替えは出さない
+  const modeSwitch = '';
   if (kind === 'variable' && c.variableIsTotal) {
     const kept = items.length ? `<p class="help">項目別の内訳（${items.length}件）は消さずに残してあります。「項目別に入力」に戻すと、内訳の合計で計算します。</p>` : '';
     $('#input-pane').innerHTML = `
@@ -2871,10 +2870,11 @@ function renderInputPane() {
     ${modeSwitch}
     <p class="pane-note">${cfg.note}スイッチを切ると、消さずに集計から外せます。</p>
     ${kind === 'living' ? livingSwitchHTML(p) : ''}
-    ${autoRowHTML(kind, c)}
+    ${kind === 'savings' ? savingsBaseHTML(p) : ''}
     <div class="items" id="items">
       ${items.length ? (kind === 'variable' ? sortByCategoryOrder(items, cats().variable) : items).map((it) => itemHTML(kind, it, c)).join('') : '<div class="empty">まだ項目がありません</div>'}
     </div>
+    ${autoRowHTML(kind, c)}
     <div class="pane-foot">
       <button type="button" class="btn primary block" data-act="add">＋ ${cfg.add}</button>
       ${extra}
@@ -2891,6 +2891,13 @@ function refreshInputTotals() {
   renderInputTabs(c);
   renderMiniSummary(c);
   $('#pane-foot').innerHTML = paneFootHTML(state.tab, c);
+  const auto = $('#auto-row');
+  if (auto) {
+    const v = autoAmount(state.tab, c);
+    auto.hidden = !v;
+    auto.classList.toggle('neg', v < 0);
+    auto.querySelector('b').textContent = yen(v);
+  }
   const totalEl = $('[data-derived-total]');
   if (totalEl) totalEl.innerHTML = totalDerivedHTML(c);
   if (state.tab === 'variable') {
@@ -2919,6 +2926,13 @@ function setupInputEvents() {
   };
   pane.addEventListener('input', (e) => {
     if (e.target.tagName === 'TEXTAREA') sizeMemo(e.target);
+    if (e.target.dataset.planF === 'savingsBase') {
+      plan().savingsBase = toAmount(e.target.value);
+      plan().updatedAt = nowISO();
+      commit();
+      refreshInputTotals();
+      return;
+    }
     if (e.target.dataset.planF === 'variableTotal') {
       plan().variableTotal = toAmount(e.target.value);
       plan().updatedAt = nowISO();
@@ -2940,6 +2954,14 @@ function setupInputEvents() {
   pane.addEventListener('change', (e) => {
     if (e.target.dataset.planF === 'livingEnabled') {
       setLivingEnabled(e.target.checked);
+      refreshInputTotals();
+      return;
+    }
+    if (e.target.dataset.planF === 'savingsBase') {
+      plan().savingsBase = toAmount(e.target.value);
+      plan().updatedAt = nowISO();
+      e.target.value = fmtInputAmount(plan().savingsBase);
+      commit();
       refreshInputTotals();
       return;
     }
@@ -2969,7 +2991,7 @@ function setupInputEvents() {
   });
 
   // 金額欄: 入力を終えたらカンマ区切りに整える
-  const isAmountInput = (el) => el.dataset.f === 'amount' || el.dataset.planF === 'variableTotal';
+  const isAmountInput = (el) => el.dataset.f === 'amount' || el.dataset.planF === 'variableTotal' || el.dataset.planF === 'savingsBase';
   pane.addEventListener('focusout', (e) => {
     if (isAmountInput(e.target)) e.target.value = fmtInputAmount(toAmount(e.target.value));
   });
@@ -3463,7 +3485,7 @@ window.PlanApp = {
       const left = variableBudget(c) - variableActual(c);
       return { label: '変動費の残り', value: fmt(left), neg: left < 0 };
     }
-    return { label: '予備費', value: fmt(c.reserve), neg: c.reserve < 0 };
+    return { label: '変動費', value: fmt(c.variable), neg: c.variable < 0 };
   },
   pull,
   lastRoute: () => lastHash,

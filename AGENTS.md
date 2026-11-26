@@ -56,6 +56,7 @@
 - 明細まわり: プロジェクトの `api.gs`（合言葉はスクリプトプロパティ `API_TOKEN`、`apiToken_()` で読む）
 - 計画: [`gas/plan.gs`](gas/plan.gs)。`doGet` / `doPost` の先頭で `planRouteGet_(e)` / `planRoutePost_(e)` を呼ぶ。手順は [`gas/README.md`](gas/README.md)
 - 計画のシート: 「計画」（1 行 = 1 項目）・「計画_月」・「計画_設定」。人が読める形で、Claude も Google Sheets から読める
+- 列のない項目（月・項目・全体に後から足したもの、知らない区分）は、plan.gs が各シートの「その他」に JSON で保存して読み戻す。計画のデータに項目を足すだけなら plan.gs の入れ替えは要らない（オーナーはスマホから Apps Script にコードを貼り付けられないため）。列を足して人が読める形にしたいときだけ plan.gs を変える
 - GAS を変えたら「デプロイを管理 › 編集 › 新バージョン」で更新する（URL は変わらない）
 
 ## 動作確認

@@ -12,6 +12,8 @@
  *   計画       … 1 行 = 1 項目（月・区分・有効・項目・種別・金額・支払日・メモ・ID・更新日時）。生活費の金額はマイナス（差し引く項目）も入る
  *   計画_月    … 1 行 = 1 か月（変動費の入れ方・全体予算・作成/更新日時・手取りの実績・上振れの貯金割合・生活費を引くか・毎月の貯金）
  *   計画_設定  … カテゴリなど（キーと値）
+ *   どのシートも、列のない項目（アプリに後から足した項目）は最後の「その他」に JSON で入る。
+ *   なので、アプリのデータに項目を足すだけなら、このファイルを入れ替えなくてよい
  *
  * アプリとのやり取り
  *   GET  ?action=planget&token=…            → { ok:true, data:{ schemaVersion, updatedAt, categories, plans } }（未保存なら data:null）
@@ -21,8 +23,30 @@
 var PLAN_SHEETS = { items: '計画', months: '計画_月', meta: '計画_設定' };
 var PLAN_KINDS = ['income', 'living', 'fixed', 'savings', 'variable'];
 var PLAN_KIND_LABEL = { income: '収入', living: '生活費', fixed: '固定費', savings: '貯金', variable: '変動費' };
-var PLAN_ITEM_HEAD = ['月', '区分', '有効', '項目', '種別', '金額', '支払日', 'メモ', 'ID', '更新日時'];
-var PLAN_MONTH_HEAD = ['月', '変動費の入れ方', '変動費（全体）', '作成日時', '更新日時', '手取り（実績）', '上振れの貯金割合（%）', '生活費', '毎月の貯金'];
+var PLAN_ITEM_HEAD = ['月', '区分', '有効', '項目', '種別', '金額', '支払日', 'メモ', 'ID', '更新日時', 'その他'];
+var PLAN_MONTH_HEAD = ['月', '変動費の入れ方', '変動費（全体）', '作成日時', '更新日時', '手取り（実績）', '上振れの貯金割合（%）', '生活費', '毎月の貯金', 'その他'];
+// 列がある項目（これ以外は「その他」に JSON で入れる）
+var PLAN_MONTH_KEYS = ['month', 'variableMode', 'variableTotal', 'createdAt', 'updatedAt', 'actualIncome', 'surplusSaveRate', 'livingEnabled', 'savingsBase'];
+var PLAN_TOP_KEYS = ['schemaVersion', 'updatedAt', 'categoriesUpdatedAt', 'categories', 'plans'];
+var PLAN_CAT_KEYS = { income: '収入カテゴリ', variable: '変動費カテゴリ', savingsType: '貯金・投資の種別' };
+/** 区分ごとに「項目」「種別」「支払日」の列へ入れるもの */
+function planItemCols_(kind) {
+  if (kind === 'income' || kind === 'variable') return { label: 'category' };
+  if (kind === 'fixed') return { label: 'name', payDay: 'payDay' };
+  if (kind === 'savings') return { label: 'name', type: 'type' };
+  return { label: 'name', type: 'type', payDay: 'payDay' }; // 生活費と、後から足した区分
+}
+/** 列にない項目だけを JSON にする（なければ空） */
+function planExtra_(obj, known) {
+  var x = {}, n = 0;
+  Object.keys(obj || {}).forEach(function (k) { if (known.indexOf(k) < 0 && obj[k] !== undefined) { x[k] = obj[k]; n++; } });
+  return n ? planText_(JSON.stringify(x)) : '';
+}
+function planParseExtra_(v, into) {
+  var t = String(v == null ? '' : v);
+  if (!t) return;
+  try { var x = JSON.parse(t); if (x && typeof x === 'object') Object.keys(x).forEach(function (k) { if (into[k] === undefined) into[k] = x[k]; }); } catch (e) { /* 壊れた JSON は読まない */ }
+}
 var PLAN_META_HEAD = ['キー', '値'];
 
 /** doGet の先頭で呼ぶ。計画以外のリクエストなら null を返す */
@@ -120,8 +144,11 @@ function planGet_() {
     categories: {},
     plans: {}
   };
-  var catKeys = { income: '収入カテゴリ', variable: '変動費カテゴリ', savingsType: '貯金・投資の種別' };
-  Object.keys(catKeys).forEach(function (k) { var a = parseList(meta[catKeys[k]]); if (a) data.categories[k] = a; });
+  Object.keys(PLAN_CAT_KEYS).forEach(function (k) { var a = parseList(meta[PLAN_CAT_KEYS[k]]); if (a) data.categories[k] = a; });
+  var top = {};
+  planParseExtra_(meta['その他'], top);
+  if (top.categories && typeof top.categories === 'object') { planParseExtra_(JSON.stringify(top.categories), data.categories); delete top.categories; }
+  planParseExtra_(JSON.stringify(top), data);
 
   monthRows.forEach(function (r) {
     var m = planMonth_(r[0]);
@@ -138,26 +165,31 @@ function planGet_() {
     if (r[6] !== '' && r[6] != null && isFinite(Number(r[6]))) data.plans[m].surplusSaveRate = Number(r[6]);
     data.plans[m].livingEnabled = String(r[7]) !== 'オフ';
     if (r[8] !== '' && r[8] != null) data.plans[m].savingsBase = planAmount_(r[8]);
+    planParseExtra_(r[9], data.plans[m]);
   });
   var kindOf = {};
   PLAN_KINDS.forEach(function (k) { kindOf[PLAN_KIND_LABEL[k]] = k; });
   itemRows.forEach(function (r) {
     var m = planMonth_(r[0]);
-    var kind = kindOf[String(r[1])];
+    var label = String(r[1] || '');
+    var kind = kindOf[label] || label; // 知らない区分は、その名前のまま
     var p = data.plans[m];
     if (!p || !kind) return;
+    var cols = planItemCols_(kind);
     var it = {
       id: planStr_(r[8]),
       enabled: !(r[2] === false || String(r[2]).toUpperCase() === 'FALSE' || r[2] === '×'),
-      amount: kind === 'living' ? planSigned_(r[5]) : planAmount_(r[5]),
+      amount: kindOf[label] && kind !== 'living' ? planAmount_(r[5]) : planSigned_(r[5]),
       memo: planStr_(r[7]),
       updatedAt: planStr_(r[9])
     };
-    if (kind === 'income' || kind === 'variable') it.category = planStr_(r[3]);
-    if (kind === 'fixed') { it.name = planStr_(r[3]); it.payDay = planStr_(r[6]); }
-    if (kind === 'living') it.name = planStr_(r[3]);
-    if (kind === 'savings') { it.name = planStr_(r[3]); it.type = planStr_(r[4]); }
-    p[kind].push(it);
+    it[cols.label] = planStr_(r[3]);
+    // 生活費や後から足した区分では、空の「種別」「支払日」は読まない
+    var loose = kind !== 'savings' && kind !== 'fixed';
+    if (cols.type && !(loose && r[4] === '')) it[cols.type] = planStr_(r[4]);
+    if (cols.payDay && !(loose && r[6] === '')) it[cols.payDay] = planStr_(r[6]);
+    planParseExtra_(r[10], it);
+    (p[kind] = p[kind] || []).push(it);
   });
   return data;
 }
@@ -176,12 +208,19 @@ function planSet_(data) {
       monthRows.push([planText_(m), p.variableMode === 'total' ? '全体' : '項目別', planAmount_(p.variableTotal), planText_(p.createdAt), planText_(p.updatedAt),
         planAmount_(p.actualIncome) || '', isFinite(rate) && p.surplusSaveRate !== '' && p.surplusSaveRate != null ? rate : '',
         p.livingEnabled === false ? 'オフ' : 'オン',
-        p.savingsBase === undefined || p.savingsBase === null || p.savingsBase === '' ? '' : planAmount_(p.savingsBase)]);
-      PLAN_KINDS.forEach(function (k) {
+        p.savingsBase === undefined || p.savingsBase === null || p.savingsBase === '' ? '' : planAmount_(p.savingsBase),
+        planExtra_(p, PLAN_MONTH_KEYS.concat(Object.keys(p).filter(function (k) { return Array.isArray(p[k]); })))]);
+      // 区分は決まった順、そのあとに知らない区分（配列になっているもの）
+      var kinds = PLAN_KINDS.concat(Object.keys(p).filter(function (k) { return Array.isArray(p[k]) && PLAN_KINDS.indexOf(k) < 0; }));
+      kinds.forEach(function (k) {
+        var cols = planItemCols_(k);
+        var known = ['id', 'enabled', 'amount', 'memo', 'updatedAt', cols.label];
+        if (cols.type) known.push(cols.type);
+        if (cols.payDay) known.push(cols.payDay);
         (p[k] || []).forEach(function (it) {
-          var label = (k === 'fixed' || k === 'savings' || k === 'living') ? (it.name || '') : (it.category || '');
-          itemRows.push([planText_(m), PLAN_KIND_LABEL[k], it.enabled !== false, planText_(label), k === 'savings' ? planText_(it.type) : '',
-            k === 'living' ? planSigned_(it.amount) : planAmount_(it.amount), k === 'fixed' ? planText_(it.payDay) : '', planText_(it.memo), planText_(it.id), planText_(it.updatedAt)]);
+          itemRows.push([planText_(m), PLAN_KIND_LABEL[k] || k, it.enabled !== false, planText_(it[cols.label]), cols.type ? planText_(it[cols.type]) : '',
+            PLAN_KIND_LABEL[k] && k !== 'living' ? planAmount_(it.amount) : planSigned_(it.amount), cols.payDay ? planText_(it[cols.payDay]) : '',
+            planText_(it.memo), planText_(it.id), planText_(it.updatedAt), planExtra_(it, known)]);
         });
       });
     });
@@ -194,7 +233,15 @@ function planSet_(data) {
       ['categoriesUpdatedAt', planText_(data.categoriesUpdatedAt)],
       ['収入カテゴリ', planText_(JSON.stringify(cats.income || []))],
       ['変動費カテゴリ', planText_(JSON.stringify(cats.variable || []))],
-      ['貯金・投資の種別', planText_(JSON.stringify(cats.savingsType || []))]
+      ['貯金・投資の種別', planText_(JSON.stringify(cats.savingsType || []))],
+      ['その他', (function () {
+        var top = {}, n = 0;
+        Object.keys(data).forEach(function (k) { if (PLAN_TOP_KEYS.indexOf(k) < 0) { top[k] = data[k]; n++; } });
+        var extraCats = {}, c = 0;
+        Object.keys(cats).forEach(function (k) { if (!PLAN_CAT_KEYS[k]) { extraCats[k] = cats[k]; c++; } });
+        if (c) { top.categories = extraCats; n++; }
+        return n ? planText_(JSON.stringify(top)) : '';
+      })()]
     ]);
     return { months: months.length, items: itemRows.length, updatedAt: data.updatedAt || '' };
   } finally {

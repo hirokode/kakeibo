@@ -1812,7 +1812,8 @@ function pull() {
         // 古い plan.gs は「手取りの実績」「上振れの貯金割合」「生活費」「毎月の貯金」を保存しないので、そのときは端末の値を残す
         for (const [m, rp] of Object.entries(raw.plans)) {
           const lp = state.data && state.data.plans[m];
-          if (!rp || !lp) continue;
+          // まだ何も入れていない端末の月（初期データ）の値では上書きしない
+          if (!rp || !lp || !(PLAN_KINDS.some((k) => (lp[k] || []).length) || lp.actualIncome)) continue;
           if (rp.actualIncome === undefined) rp.actualIncome = lp.actualIncome;
           if (rp.surplusSaveRate === undefined) rp.surplusSaveRate = lp.surplusSaveRate;
           if (rp.living === undefined) rp.living = lp.living;
